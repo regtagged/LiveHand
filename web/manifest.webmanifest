@@ -1,0 +1,13 @@
+{
+  "name": "LiveHand",
+  "short_name": "LiveHand",
+  "description": "Type a live poker hand and export it as text, an image or a replayer.",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#101014",
+  "theme_color": "#101014",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#101014">
+<meta name="description" content="Type a live poker hand and export it as text, an image or a replayer.">
+<title>LiveHand</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <button class="ghost back" data-act="back" hidden aria-label="Back">&#8249;</button>
+  <div class="crumb"><strong id="crumb-title">New hand</strong><span id="crumb-sub"></span></div>
+  <button class="ghost" data-act="restart" title="Start another hand at this table">Next hand</button>
+</header>
+
+<nav class="steps" id="steps" aria-label="Progress">
+  <button data-step="0"><span>1</span>Session</button>
+  <button data-step="1"><span>2</span>Table</button>
+  <button data-step="2"><span>3</span>Action</button>
+  <button data-step="3"><span>4</span>Export</button>
+</nav>
+
+<main id="view"></main>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet-panel" role="dialog" aria-modal="true">
+    <div class="sheet-head"><strong id="sheet-title"></strong>
+      <button class="ghost" data-act="close-sheet" aria-label="Close">&#10005;</button></div>
+    <div id="sheet-body"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

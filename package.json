@@ -1,0 +1,21 @@
+{
+  "name": "livehand",
+  "version": "0.1.0",
+  "description": "Enter a live poker hand on your phone, export it as text, image or replayer",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.test.js",
+    "build": "node scripts/build.js"
+  },
+  "keywords": [
+    "poker",
+    "hand-history",
+    "pwa"
+  ],
+  "license": "ISC"
+}

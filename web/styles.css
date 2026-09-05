@@ -1,0 +1,274 @@
+/* Mobile first: the app is meant to be used one-handed at a table, so every
+   control is a full-width touch target and the action bar is pinned within
+   thumb reach. Wider screens just get more room, not a different layout. */
+
+:root {
+  color-scheme: dark;
+  --bg: #101014;
+  --panel: #1a1a20;
+  --panel-2: #23232b;
+  --line: #33333d;
+  --ink: #e9e9ec;
+  --muted: #9b9ba6;
+  --accent: #4ade80;
+  --accent-ink: #05240f;
+  --warn: #fbbf24;
+  --danger: #f87171;
+  --chip: #7dd3fc;
+  --radius: 12px;
+  --safe: env(safe-area-inset-bottom, 0px);
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+/* `display` on .sheet / .toast would otherwise beat the hidden attribute. */
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  padding-bottom: calc(12px + var(--safe));
+}
+
+main { max-width: 680px; margin: 0 auto; padding: 12px 14px 24px; }
+
+/* ---- chrome ---- */
+
+.topbar {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; background: #101014ee; backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+}
+.crumb { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.crumb strong { font-size: 15px; }
+.crumb span { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.steps {
+  display: flex; gap: 6px; max-width: 680px; margin: 10px auto 0; padding: 0 14px;
+}
+.steps button {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 8px 4px; font-size: 12px; font-weight: 600; color: var(--muted);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 999px; cursor: pointer;
+}
+.steps button span {
+  display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--panel-2); font-size: 11px;
+}
+.steps button[aria-current='true'] { color: var(--ink); border-color: var(--accent); }
+.steps button[aria-current='true'] span { background: var(--accent); color: var(--accent-ink); }
+.steps button:disabled { opacity: .4; cursor: default; }
+
+/* ---- forms ---- */
+
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; }
+.card > h2 { font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; }
+
+label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+.field { margin-bottom: 12px; }
+.field:last-child { margin-bottom: 0; }
+.row { display: flex; gap: 10px; }
+.row > * { flex: 1; min-width: 0; }
+
+input[type=text], input[type=number], input[type=search], select, textarea {
+  width: 100%; padding: 11px 12px; font-size: 16px; color: var(--ink);
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px;
+  font-family: inherit;
+}
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+textarea { resize: vertical; min-height: 70px; }
+
+.segment { display: flex; gap: 4px; background: var(--panel-2); border-radius: 10px; padding: 3px; }
+.segment button {
+  flex: 1; padding: 9px 6px; font-size: 13px; font-weight: 600; color: var(--muted);
+  background: transparent; border: 0; border-radius: 8px; cursor: pointer;
+}
+.segment button[aria-pressed='true'] { background: var(--accent); color: var(--accent-ink); }
+
+button.primary {
+  width: 100%; padding: 14px; font-size: 16px; font-weight: 700;
+  color: var(--accent-ink); background: var(--accent); border: 0; border-radius: var(--radius); cursor: pointer;
+}
+button.primary:disabled { opacity: .4; cursor: default; }
+button.secondary {
+  width: 100%; padding: 12px; font-size: 15px; font-weight: 600; color: var(--ink);
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer;
+}
+button.ghost {
+  padding: 6px 10px; font-size: 14px; font-weight: 600; color: var(--muted);
+  background: transparent; border: 1px solid var(--line); border-radius: 8px; cursor: pointer;
+}
+button.ghost.back { font-size: 20px; line-height: 1; padding: 4px 12px; }
+
+.hint { font-size: 12px; color: var(--muted); margin: 6px 0 0; }
+.problems { margin: 0 0 12px; padding: 10px 12px; border-radius: 10px;
+  background: #3b1d1d; border: 1px solid #7f1d1d; color: #fecaca; font-size: 13px; }
+.problems ul { margin: 4px 0 0; padding-left: 18px; }
+
+/* ---- seat picker ---- */
+
+/* One seat per row on a phone: a seat needs a readable stack field more than
+   it needs to sit beside its neighbour. */
+.seatgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; }
+.seat-row {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px;
+}
+.seat-row.off { opacity: .45; }
+.seat-row.hero { border-color: var(--accent); }
+.seat-row .pos { width: 46px; font-size: 13px; font-weight: 700; }
+.seat-row input[type=text] { flex: 1 1 70px; min-width: 0; padding: 7px 9px; font-size: 15px; }
+.seat-row .toggle {
+  width: 30px; height: 30px; flex: none; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--panel); color: var(--muted); font-size: 15px; cursor: pointer;
+}
+.seat-row .toggle[aria-pressed='true'] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.seat-row .herobtn { flex: none; padding: 6px 9px; font-size: 11px; font-weight: 700; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--muted); cursor: pointer; }
+.seat-row .herobtn[aria-pressed='true'] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+/* ---- cards ---- */
+
+.cardface {
+  display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+  width: 38px; height: 52px; border-radius: 6px; background: #fdfdfb; color: #111;
+  font-weight: 700; line-height: 1; box-shadow: 0 1px 4px #0006; flex: none;
+}
+.cardface .r { font-size: 19px; }
+.cardface .s { font-size: 13px; }
+.cardface.small { width: 26px; height: 36px; border-radius: 4px; }
+.cardface.small .r { font-size: 13px; } .cardface.small .s { font-size: 9px; }
+.cardface.empty { background: #2a2a33; border: 1px dashed var(--line); box-shadow: none; }
+.suit-s { color: #1d1d1f; } .suit-h { color: #d0342c; }
+.suit-d { color: #2668c9; } .suit-c { color: #1f9d55; }
+
+.cardslots { display: flex; gap: 6px; align-items: center; }
+.cardslots button { background: none; border: 0; padding: 0; cursor: pointer; }
+
+.picker-suits { display: flex; gap: 6px; margin-bottom: 10px; }
+.picker-suits button {
+  flex: 1; padding: 10px; font-size: 20px; border-radius: 10px; cursor: pointer;
+  background: var(--panel-2); border: 1px solid var(--line);
+}
+.picker-suits button[aria-pressed='true'] { border-color: var(--accent); background: #22322a; }
+.picker-ranks { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.picker-ranks button {
+  padding: 12px 0; font-size: 16px; font-weight: 700; border-radius: 9px; cursor: pointer;
+  background: var(--panel-2); border: 1px solid var(--line); color: var(--ink);
+}
+.picker-ranks button:disabled { opacity: .28; cursor: default; }
+
+/* ---- action step ---- */
+
+.felt {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 12px; margin-bottom: 10px; text-align: center;
+}
+.felt .board { display: flex; gap: 6px; justify-content: center; min-height: 52px; align-items: center; }
+.felt .pot { margin-top: 8px; font-size: 15px; font-weight: 700; color: var(--warn); }
+.felt .streetname { font-size: 11px; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
+
+/* The strip is deliberately scrollable rather than shrink-to-fit: a hand can
+   carry ten seats, and squeezing them all in makes every one unreadable. */
+.strip { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 10px; scroll-snap-type: x proximity; }
+.strip::-webkit-scrollbar { height: 4px; }
+.strip::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+.pcard {
+  flex: none; width: 104px; scroll-snap-align: center; padding: 9px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 11px;
+}
+.pcard.folded { opacity: .4; }
+.pcard.hero { border-color: var(--accent); }
+.pcard.acting { border-color: var(--warn); box-shadow: 0 0 0 2px #fbbf2433; }
+.pcard .pos { font-size: 12px; font-weight: 700; }
+.pcard .nm { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pcard .stack { margin-top: 4px; font-size: 14px; font-weight: 700; color: var(--chip); }
+.pcard .bet { margin-top: 3px; font-size: 12px; font-weight: 700; color: var(--warn); min-height: 17px; }
+.pcard .did { margin-top: 3px; font-size: 11px; color: var(--muted); min-height: 15px; }
+.pcard .hole { display: flex; gap: 3px; margin-top: 5px; }
+
+.log { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 10px; }
+.log h3 { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; }
+.log ol { margin: 0; padding: 0; list-style: none; font-size: 13px; }
+.log li { padding: 2px 0; color: var(--muted); }
+.log li b { color: var(--ink); font-weight: 600; }
+.log li.hero b { color: var(--accent); }
+.log .streetmark { margin-top: 6px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--warn); }
+
+.actionbar {
+  position: sticky; bottom: 0; z-index: 15;
+  margin: 0 -14px; padding: 10px 14px calc(10px + var(--safe));
+  background: #14141aee; backdrop-filter: blur(10px); border-top: 1px solid var(--line);
+}
+.actionbar .who { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; margin-bottom: 8px; }
+.actionbar .who b { font-size: 15px; }
+.actionbar .who span { color: var(--muted); }
+.verbs { display: flex; gap: 8px; }
+.verbs button {
+  flex: 1; padding: 14px 4px; font-size: 15px; font-weight: 700; border-radius: 11px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--panel-2); color: var(--ink);
+}
+.verbs button.fold { color: var(--danger); }
+.verbs button.aggro { background: var(--warn); color: #2a1a00; border-color: var(--warn); }
+.verbs button.check { color: var(--accent); }
+.verbs button:disabled { opacity: .35; cursor: default; }
+
+.sizer { margin-top: 10px; }
+.presets { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.presets button {
+  flex: 1 1 auto; min-width: 58px; padding: 9px 6px; font-size: 13px; font-weight: 700;
+  border-radius: 9px; border: 1px solid var(--line); background: var(--panel-2); color: var(--ink); cursor: pointer;
+}
+.presets button.allin { color: var(--danger); border-color: #7f1d1d; }
+/* Each preset shows what it is and what it comes to, stacked. */
+.presets button b { display: block; font-size: 13px; }
+.presets button i { display: block; margin-top: 2px; font-style: normal; font-size: 11px;
+  font-weight: 600; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sizerow { display: flex; gap: 8px; align-items: stretch; }
+.sizerow input { flex: 1; }
+.sizerow .segment { flex: none; width: 168px; }
+.sizemeta { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 6px; }
+.sizemeta .over { color: var(--danger); font-weight: 700; }
+
+/* ---- export ---- */
+
+.tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+.tabs button {
+  flex: 1; padding: 10px 4px; font-size: 13px; font-weight: 600; color: var(--muted);
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; cursor: pointer;
+}
+.tabs button[aria-pressed='true'] { color: var(--ink); border-color: var(--accent); background: #1d2a22; }
+.preview { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; overflow-x: auto; }
+.preview img, .preview svg { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+.preview pre {
+  margin: 0; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre; color: #d4d4d8;
+}
+.preview iframe { width: 100%; height: 620px; border: 0; border-radius: 8px; background: #101014; }
+.exportbtns { display: flex; gap: 8px; margin-top: 12px; }
+.exportbtns button { flex: 1; }
+
+/* ---- sheet + toast ---- */
+
+.sheet { position: fixed; inset: 0; z-index: 40; background: #000000aa; display: flex; align-items: flex-end; justify-content: center; }
+.sheet-panel {
+  width: 100%; max-width: 520px; max-height: 86vh; overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 16px 16px 0 0;
+  padding: 14px 14px calc(18px + var(--safe));
+}
+.sheet-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.sheet-head strong { font-size: 15px; }
+
+.toast {
+  position: fixed; left: 50%; bottom: calc(24px + var(--safe)); transform: translateX(-50%);
+  z-index: 50; padding: 10px 16px; border-radius: 999px; font-size: 14px; font-weight: 600;
+  background: var(--accent); color: var(--accent-ink); box-shadow: 0 6px 24px #0008;
+}
+
+@media (min-width: 620px) {
+  .sheet { align-items: center; }
+  .sheet-panel { border-radius: 16px; }
+  .exportbtns button { flex: 0 1 auto; padding-left: 20px; padding-right: 20px; }
+}
