@@ -13,7 +13,7 @@
  * root (Vercel) or a project subpath (GitHub Pages).
  */
 
-import { cp, rm, mkdir } from 'node:fs/promises';
+import { cp, rm, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -25,4 +25,10 @@ await mkdir(DIST, { recursive: true });
 await cp(resolve(ROOT, 'web'), DIST, { recursive: true });
 await cp(resolve(ROOT, 'src'), resolve(DIST, 'src'), { recursive: true });
 
-console.log(`built ${DIST}`);
+// Give the service worker a cache name unique to this build.
+const buildId = process.env.GITHUB_SHA?.slice(0, 12)
+  || new Date().toISOString().replace(/\D/g, '').slice(0, 14);
+const swPath = resolve(DIST, 'sw.js');
+await writeFile(swPath, (await readFile(swPath, 'utf8')).replaceAll('__BUILD_ID__', buildId));
+
+console.log(`built ${DIST} (build ${buildId})`);

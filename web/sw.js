@@ -3,7 +3,11 @@
  * enough — and it is the point of the exercise: hands get typed at a table
  * where there is often no usable signal.
  */
-const CACHE = 'livehand-v1';
+// Stamped with the build id at deploy time. The cache is keyed by it, so a new
+// deploy lands in a new cache and `activate` drops the old one — without that,
+// a cache-first worker serves the first version it ever saw, for ever, and a
+// fix pushed later never reaches a phone that has already opened the app.
+const CACHE = 'livehand-__BUILD_ID__';
 const SHELL = [
   './', 'index.html', 'styles.css', 'app.js', 'canvas.js', 'store.js', 'icon.svg',
   'manifest.webmanifest',
