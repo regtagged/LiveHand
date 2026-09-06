@@ -34,8 +34,9 @@ npm test    # 35 tests, Node's built-in runner
 
 ## The flow
 
-**1 · Session.** Skippable — the defaults are 0.5/1 with a big blind ante, and
-there's a **Skip** button that goes straight to the table. Otherwise: a
+**1 · Session.** A hand opens on the **table**, not here — the defaults are
+0.5/1 with a big blind ante, they are shown at the top of the table screen, and
+**Change** comes back to this page when they are wrong. Otherwise: a
 tournament name if you want one (optional, with a dropdown of recent ones since
 the blinds and table size usually repeat), whether you're typing *chips* or
 *big blinds*, the blinds, and the ante. A big blind ante needs no size — it is
@@ -44,8 +45,10 @@ going stale at the next level.
 
 **2 · Table.** Eight seats by default, all switched off except the blinds.
 Switch on the ones that were in the hand — most shared hands name three or four
-players — tap **YOU** on your seat, and pick your two cards. Nothing is ever
-made hero for you.
+players — and tap **YOU** on your seat, which seats you if you weren't already
+and opens the deck for your two cards. Nothing is ever made hero for you. Your
+stack is a row of one-tap depths (20/30/40/60/100 bb) or an exact number if you
+want one.
 
 **Only your own stack is required.** A blind that posts and folds is in the hand
 whether you looked its stack up or not, so leaving it blank is fine: the engine
@@ -75,13 +78,24 @@ defaults to big blinds preflop and pot percentage after.
 When a street's betting closes, the card picker opens on its own — the hand
 cannot go anywhere without those cards, so it does not make you ask.
 
+While someone else is to act there is a **Folds to me** button, which passes
+every seat between there and yours. "CO opens, folds to me in the big blind" is
+the spot people ask about most and the one where those taps carry no
+information. Every fold still lands in the action log, and undo peels them back
+one at a time.
+
 At the end it works out who won; if you never saw a villain's cards, tap who
 took it instead.
 
-For scale: a full four-street hand — open, three-bet, call, c-bet, call, jam,
-call, showdown — takes **25 interactions**, of which 23 are taps on large
-targets and the only typing is your own stack. The same hand written out as a
-message is around 135 characters of phone keyboard.
+For scale, with nothing typed at all:
+
+| | LiveHand | Written out |
+|---|---|---|
+| Preflop spot — open, folds to me, my decision | **8 taps** | ~35 characters |
+| Four streets — open, 3-bet, call, c-bet, call, jam, call, showdown | **23 taps** | ~135 characters |
+
+Both are taps on large targets with no keyboard, which is the point: the
+keyboard is where the time and the typos go on a phone.
 
 **4 · Export.** All three formats, previewed, with copy / download / share. The
 share button uses the native share sheet on phones that have one.

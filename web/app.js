@@ -12,7 +12,7 @@ import { RANKS, SUITS, SUIT_GLYPH, SUIT_NAME, cardStr, sameCard } from './src/co
 import { replay, sizeToTotal, withAction, withoutLastAction, STREET_LABEL, BOARD_LENGTH } from './src/core/engine.js';
 import {
   createHand, resizeTable, togglePlayer, setHero, updatePlayer, validateSetup,
-  usedCards, reviveHand, nextHand, anteAmount,
+  usedCards, reviveHand, nextHand, anteAmount, heroOf,
 } from './src/core/hand.js';
 import { money, stakesLabel } from './src/core/narrate.js';
 import { seatRing } from './src/core/positions.js';
@@ -29,7 +29,10 @@ const sheet = document.getElementById('sheet');
 
 const app = {
   hand: reviveHand(store.loadDraft()) || createHand(),
-  step: 0,
+  // The table is where a hand actually starts. Stakes have working defaults and
+  // are one tap away, so opening on them charged every hand a screen it rarely
+  // needed — which is most of the cost of a preflop-only spot.
+  step: 1,
   // sizeMode null means "whatever suits this street" — see sizeMode().
   ui: { sizeMode: null, sizeValue: '', exportTab: 'text', showNames: false, picker: null },
 };
@@ -232,6 +235,10 @@ function renderTable() {
   return `
   <div class="card">
     <h2>Table</h2>
+    <div class="stakesline">
+      <span><strong>${esc(stakesLabel(hand))}</strong>${hand.tournament ? ` · ${esc(hand.tournament)}` : ''}</span>
+      <button class="ghost" data-act="goto" data-step="0">Change</button>
+    </div>
     <div class="field"><label for="seats">Seats at the table</label>
       <select id="seats" data-field="tableSize">
         ${Array.from({ length: 9 }, (_, i) => i + 2).map((n) => `<option value="${n}"
@@ -257,7 +264,7 @@ function renderTable() {
           <input type="text" inputmode="decimal" data-stack="${position}" ${on ? '' : 'disabled'}
             value="${player ? amountValue(player.stack) : ''}" placeholder="stack">
           <button class="herobtn" data-act="set-hero" data-pos="${position}"
-            aria-pressed="${!!(player && player.isHero)}" ${on ? '' : 'disabled'}>YOU</button>
+            aria-pressed="${!!(player && player.isHero)}">YOU</button>
         </div>
         ${app.ui.showNames && on ? `<div class="seat-row">
           <span class="pos">${position}</span>
@@ -266,6 +273,15 @@ function renderTable() {
       }).join('')}
     </div>
   </div>
+
+  ${hero ? `<div class="card">
+    <h2>Your stack</h2>
+    <div class="presets">
+      ${[20, 30, 40, 60, 100].map((depth) => `<button data-act="depth" data-value="${depth}"
+        aria-pressed="${hero.stack === depth * hand.bb}"><b>${depth}</b><i>BB</i></button>`).join('')}
+    </div>
+    <p class="hint">Or type an exact number next to your seat above.</p>
+  </div>` : ''}
 
   <div class="card">
     <h2>Your cards</h2>
@@ -422,6 +438,8 @@ function renderActionBar(state) {
       <span>${legal.unknownStack ? 'stack not entered' : `${showAmount(player.stack)} behind`}${
         legal.toCall ? ` · ${showAmount(legal.toCall)} to call` : ''}</span>
     </div>
+    ${foldToMeLabel(state) ? `<button class="secondary foldtome" data-act="fold-to-me">
+      ${esc(foldToMeLabel(state))}</button>` : ''}
     <div class="verbs">
       <button class="fold" data-act="act" data-kind="fold">Fold</button>
       <button class="${legal.canCheck ? 'check' : ''}" data-act="act"
@@ -489,6 +507,34 @@ function presetSizes(legal, state, hand) {
   if (raises === 1) return [3, 3.5, 4].map((m) => [`${m}x`, size(m, facing)]);
   // Four-bet and beyond, where the multiples come right down.
   return [2, 2.2, 2.5].map((m) => [`${m}x`, size(m, facing)]);
+}
+
+/**
+ * "Folds to me": every seat between here and yours passes.
+ *
+ * Offered whenever someone else is to act, including after a raise — "CO
+ * opens, folds to me in the big blind" is the single most common spot anyone
+ * asks about, and it is the one where these taps carry no information at all.
+ * Each fold is still written into the action log, and undo peels them back one
+ * at a time.
+ */
+function foldToMeLabel(state) {
+  const hero = state.players.find((p) => p.isHero);
+  if (!hero || !state.toAct || state.toAct === hero.position || hero.folded) return '';
+  return `Folds to me (${hero.position})`;
+}
+
+function foldToHero() {
+  const hero = heroOf(app.hand);
+  if (!hero) return;
+  let hand = app.hand;
+  // Bounded rather than while(true): a stuck engine should not hang the tab.
+  for (let i = 0; i < 24; i++) {
+    const state = replay(hand);
+    if (state.status !== 'betting' || state.toAct === hero.position) break;
+    hand = withAction(hand, { position: state.toAct, kind: 'fold', to: state.legal.streetCommit });
+  }
+  setHand(hand);
 }
 
 /**
@@ -723,6 +769,12 @@ document.addEventListener('click', (event) => {
     case 'ante-mode': setHand({ ...app.hand, anteMode: target.dataset.value }); break;
     case 'load-session': loadSession(Number(target.dataset.index)); break;
 
+    case 'depth': {
+      const hero = heroOf(app.hand);
+      if (hero) setHand(updatePlayer(app.hand, hero.position, { stack: Number(target.dataset.value) * app.hand.bb }));
+      break;
+    }
+    case 'fold-to-me': foldToHero(); break;
     case 'toggle-names': app.ui.showNames = !app.ui.showNames; render(); break;
     case 'toggle-seat': {
       const position = target.dataset.pos;
@@ -732,7 +784,11 @@ document.addEventListener('click', (event) => {
     }
     case 'set-hero': {
       const position = target.dataset.pos;
-      setHand(setHero(app.hand, position));
+      // Claiming a seat implies sitting in it, so an unlisted one switches on.
+      const seated = app.hand.players.some((p) => p.position === position)
+        ? app.hand
+        : togglePlayer(app.hand, position, true);
+      setHand(setHero(seated, position));
       const hero = app.hand.players.find((p) => p.position === position);
       // Naming your seat and dealing yourself in is one thought, not two.
       if (hero && !hero.cards.length) autoOpen(() => pickHoleCards(position, 0));
