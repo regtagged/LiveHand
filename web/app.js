@@ -14,7 +14,7 @@ import {
   createHand, resizeTable, togglePlayer, setHero, updatePlayer, validateSetup,
   usedCards, reviveHand, nextHand, anteAmount, heroOf,
 } from './src/core/hand.js';
-import { money, stakesLabel } from './src/core/narrate.js';
+import { money, stakesLabel, isUnfinished, openQuestion } from './src/core/narrate.js';
 import { seatRing } from './src/core/positions.js';
 import { buildGgSheet } from './src/render/ggSheet.js';
 import { buildTableSheet } from './src/render/tableSheet.js';
@@ -360,8 +360,10 @@ function playerCard(player, state) {
     <div class="stack">${stackText}${player.allIn ? ' · AI' : ''}</div>
     <div class="bet">${player.streetCommit ? showAmount(player.streetCommit) : ' '}</div>
     <div class="did">${last ? esc(last) : ' '}</div>
-    ${player.cards && player.cards.length
-      ? `<div class="hole">${player.cards.map((c) => cardHtml(c, true)).join('')}</div>` : ''}
+    ${player.isHero && app.hand.hideHeroCards
+      ? '<div class="hole"><span class="cardface small back">?</span><span class="cardface small back">?</span></div>'
+      : player.cards && player.cards.length
+        ? `<div class="hole">${player.cards.map((c) => cardHtml(c, true)).join('')}</div>` : ''}
   </div>`;
 }
 
@@ -440,6 +442,8 @@ function renderActionBar(state) {
     </div>
     ${foldToMeLabel(state) ? `<button class="secondary foldtome" data-act="fold-to-me">
       ${esc(foldToMeLabel(state))}</button>` : ''}
+    ${(app.hand.actions || []).length ? `<button class="secondary endhere" data-act="goto" data-step="3">
+      Stop here and ask</button>` : ''}
     <div class="verbs">
       <button class="fold" data-act="act" data-kind="fold">Fold</button>
       <button class="${legal.canCheck ? 'check' : ''}" data-act="act"
@@ -631,7 +635,16 @@ function renderExport() {
     body = `<iframe title="Replayer preview" srcdoc="${esc(html)}"></iframe>`;
   }
 
+  const unfinished = isUnfinished(state);
+  const question = unfinished ? openQuestion(state, hand) : '';
+
   return `
+  ${unfinished ? `<div class="card openended">
+    <strong>Posted unfinished</strong>
+    <p class="hint">${esc(question ? `${question}.` : 'The hand stops where you left it.')}
+      Every export says so rather than implying a result — go back to Action to carry on.</p>
+  </div>` : ''}
+
   <div class="tabs">
     ${EXPORT_TABS.map(([id, label]) => `<button data-act="export-tab" data-value="${id}"
       aria-pressed="${tab === id}">${label}</button>`).join('')}
@@ -643,6 +656,17 @@ function renderExport() {
       : '<button class="secondary" data-act="download">Download</button>'}
     <button class="secondary" data-act="share">Share</button>
   </div>
+  <div class="card" style="margin-top:14px">
+    <h2>Your cards</h2>
+    <div class="segment">
+      <button data-act="hide-cards" data-value="show" aria-pressed="${!hand.hideHeroCards}">Show them</button>
+      <button data-act="hide-cards" data-value="hide" aria-pressed="${hand.hideHeroCards}">Keep them secret</button>
+    </div>
+    <p class="hint">${hand.hideHeroCards
+      ? 'Your hand exports as ?? — ask what people would do before you tell them what you had.'
+      : 'Your two cards are shown in every export.'}</p>
+  </div>
+
   <div class="card" style="margin-top:14px">
     <h2>Notes</h2>
     <textarea data-field="note" placeholder="What was the question?">${esc(hand.note || '')}</textarea>
@@ -809,6 +833,7 @@ document.addEventListener('click', (event) => {
     case 'set-winner': setHand({ ...app.hand, winners: [target.dataset.pos] }); break;
 
     case 'export-tab': app.ui.exportTab = target.dataset.value; render(); break;
+    case 'hide-cards': setHand({ ...app.hand, hideHeroCards: target.dataset.value === 'hide' }); break;
     case 'copy-text': copyText(); break;
     case 'download': downloadCurrent(); break;
     case 'share': shareCurrent(); break;

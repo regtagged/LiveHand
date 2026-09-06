@@ -13,7 +13,7 @@
 
 import { cardStr } from '../core/cards.js';
 import { BOARD_LENGTH, STREET_LABEL } from '../core/engine.js';
-import { bubbleText, money, titleLine } from '../core/narrate.js';
+import { bubbleText, money, titleLine, isUnfinished, openQuestion } from '../core/narrate.js';
 
 /**
  * Walk the hand and snapshot the table after every action.
@@ -24,7 +24,8 @@ export function buildFrames(hand, state) {
     position: p.position,
     name: p.name,
     isHero: !!p.isHero,
-    cards: p.isHero ? (p.cards || []).map(cardStr) : [],
+    cards: p.isHero && !hand.hideHeroCards ? (p.cards || []).map(cardStr) : [],
+    hidden: !!(p.isHero && hand.hideHeroCards),
     unknownStack: !!p.unknownStack,
     stack: p.startingStack,
     bet: 0,
@@ -57,6 +58,7 @@ export function buildFrames(hand, state) {
         name: p.name,
         isHero: p.isHero,
         cards: p.cards,
+        hidden: p.hidden,
         stack: p.unknownStack ? '—' : money(p.stack, hand, 'bb'),
         bet: p.bet ? money(p.bet, hand, 'bb') : '',
         folded: p.folded,
@@ -96,11 +98,19 @@ export function buildFrames(hand, state) {
     }
   });
 
+  // A hand posted mid-decision stops where it stops: the bets stay on the felt
+  // and the closing frame asks the question instead of announcing a winner.
+  if (isUnfinished(state)) {
+    const question = openQuestion(state, hand) || 'Posted unfinished';
+    snapshot(state.street, (state.board || []).slice(0, BOARD_LENGTH[state.street] || 0), question, state.toAct);
+    return { frames, meta: { title: titleLine(hand), handId: hand.id, showdown: [], unfinished: true } };
+  }
+
   // Final frame: turn everyone's cards over and say who took it.
   const finalBoard = (state.board || []).slice(0, BOARD_LENGTH[state.street] || 5);
   for (const entry of state.showdown || []) {
     const player = find(entry.position);
-    if (player && entry.cards.length) player.cards = entry.cards.map(cardStr);
+    if (player && entry.cards.length && !player.hidden) player.cards = entry.cards.map(cardStr);
   }
   const lastStreet = state.streets[state.streets.length - 1];
   if (lastStreet) { collected = lastStreet.potEnd; giveBack(lastStreet.uncalled); }
@@ -162,6 +172,7 @@ const TEMPLATE = `<!doctype html>
           display:flex; flex-direction:column; align-items:center; justify-content:center;
           font-weight:700; line-height:1; box-shadow:0 1px 4px #0006; }
   .card .r { font-size:18px; } .card .s { font-size:13px; }
+  .card.back { background:#33334a; color:#c7c7d1; border:1px solid #6b6b7a; font-size:13px; }
   .card.s { color:#1d1d1f; } .card.h { color:#d0342c; }
   .card.d { color:#2668c9; } .card.c { color:#1f9d55; }
   .pot { font-size:14px; font-weight:700; color:#fde68a; background:#0007;
@@ -274,7 +285,9 @@ const TEMPLATE = `<!doctype html>
       seat.style.left = x + '%';
       seat.style.top = y + '%';
       var hole = '';
-      if (player.cards && player.cards.length) {
+      if (player.hidden) {
+        hole = '<div class="hole"><div class="card back">?</div><div class="card back">?</div></div>';
+      } else if (player.cards && player.cards.length) {
         hole = '<div class="hole">' + player.cards.map(function (code) {
           var glyph = { s: '\\u2660', h: '\\u2665', d: '\\u2666', c: '\\u2663' }[code.charAt(1)];
           return '<div class="card ' + code.charAt(1) + '"><span class="r">' + code.charAt(0)

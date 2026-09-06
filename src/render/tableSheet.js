@@ -10,9 +10,9 @@
 
 import { cardsStr } from '../core/cards.js';
 import { STREET_LABEL } from '../core/engine.js';
-import { bubbleText, money, titleLine } from '../core/narrate.js';
+import { bubbleText, money, titleLine, isUnfinished, openQuestion } from '../core/narrate.js';
 import { seatRing } from '../core/positions.js';
-import { Scene, measureText, cardRow } from './scene.js';
+import { Scene, measureText, cardRow, hiddenCardRow } from './scene.js';
 
 const FELT = '#1f5c3d';
 const FELT_EDGE = '#123c28';
@@ -45,7 +45,9 @@ export function buildTableSheet(hand, state, { width = 840 } = {}) {
 
   const summary = summaryLine(hand, state);
   if (summary) {
-    scene.text(width / 2, y + 18, summary, { size: 15, weight: 700, fill: '#86efac', anchor: 'middle' });
+    scene.text(width / 2, y + 18, summary, {
+      size: 15, weight: 700, fill: isUnfinished(state) ? '#fcd34d' : '#86efac', anchor: 'middle',
+    });
     y += 30;
   }
 
@@ -143,9 +145,12 @@ function drawSeat(scene, hand, state, player, { x, y, w, h }) {
     size: 13, fill: player.unknownStack ? '#57575f' : player.folded ? '#52525b' : '#7dd3fc',
   });
 
-  if (player.cards && player.cards.length === 2) {
-    const size = 18;
-    cardRow(scene, player.cards, { x: x + w - size * 2 - 15, y: y + 26, size, gap: 3, variant: 'face' });
+  const size = 18;
+  const cardsX = x + w - size * 2 - 15;
+  if (player.isHero && hand.hideHeroCards) {
+    hiddenCardRow(scene, 2, { x: cardsX, y: y + 26, size, gap: 3, variant: 'face' });
+  } else if (player.cards && player.cards.length === 2) {
+    cardRow(scene, player.cards, { x: cardsX, y: y + 26, size, gap: 3, variant: 'face' });
   }
 }
 
@@ -193,6 +198,7 @@ function drawStreetColumns(scene, hand, state, { y, width, pad }) {
 }
 
 function summaryLine(hand, state) {
+  if (isUnfinished(state)) return openQuestion(state, hand);
   if (!state.winners || !state.winners.length) return '';
   return state.winners
     .map((winner) => {

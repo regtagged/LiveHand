@@ -87,6 +87,19 @@ one at a time.
 At the end it works out who won; if you never saw a villain's cards, tap who
 took it instead.
 
+**A hand does not have to finish.** Most hands worth posting stop on a
+decision — you are facing a four-bet jam and want to know what the table would
+do. **Stop here and ask** takes you to the exports from wherever you are, and
+every export says the hand is unfinished and whose action it is rather than
+implying a result: no showdown, no winner, "Pot so far" instead of a total, and
+players marked still to act rather than mucked.
+
+**4 · Export.** Alongside the three formats there is **Keep them secret**,
+which exports your own two cards as `??` — a mystery hand, so people answer the
+spot before they know what you held. It redacts them everywhere at once,
+including the data embedded in the replayer file, so nothing leaks through the
+one export people can open in a text editor.
+
 For scale, with nothing typed at all:
 
 | | LiveHand | Written out |
@@ -97,8 +110,8 @@ For scale, with nothing typed at all:
 Both are taps on large targets with no keyboard, which is the point: the
 keyboard is where the time and the typos go on a phone.
 
-**4 · Export.** All three formats, previewed, with copy / download / share. The
-share button uses the native share sheet on phones that have one.
+All three formats are previewed, with copy / download / share. The share button
+uses the native share sheet on phones that have one.
 
 ## What the engine guarantees
 

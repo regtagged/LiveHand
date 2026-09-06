@@ -225,6 +225,13 @@ button.ghost.back { font-size: 20px; line-height: 1; padding: 4px 12px; }
 .stakesline strong { color: var(--ink); }
 
 .foldtome { margin-bottom: 8px; padding: 10px; font-size: 14px; }
+.endhere { margin-bottom: 8px; padding: 10px; font-size: 14px; color: var(--warn); }
+
+.openended { border-color: #7c5410; background: #2a2113; }
+.openended strong { display: block; font-size: 14px; color: var(--warn); margin-bottom: 4px; }
+
+.cardface.back { background: #33334a; color: #c7c7d1; border: 1px solid #6b6b7a;
+  box-shadow: none; font-size: 13px; }
 
 .verbs { display: flex; gap: 8px; }
 .verbs button {

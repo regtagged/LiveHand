@@ -138,6 +138,16 @@ export function flowRuns(scene, runs, { x, y, maxWidth, size = 16, lineHeight = 
   return lines.length ? cursorY : y;
 }
 
+/** Draw face-down cards — a hand deliberately not being shown. */
+export function hiddenCardRow(scene, count, { x, y, size, gap = 6, variant = 'solid' }) {
+  let cursorX = x;
+  for (let i = 0; i < count; i++) {
+    scene.card(cursorX, y, size, size * (variant === 'face' ? 1.4 : 1.08), null, { variant });
+    cursorX += size + gap;
+  }
+  return cursorX;
+}
+
 /** Draw a row of cards left to right; returns the x just past the last one. */
 export function cardRow(scene, cards, { x, y, size, gap = 6, variant = 'solid' }) {
   let cursorX = x;

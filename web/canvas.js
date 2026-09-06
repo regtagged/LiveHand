@@ -31,6 +31,20 @@ function setFont(ctx, node) {
 
 function drawCard(ctx, node) {
   const { x, y, w, h, card } = node;
+  if (!card) {
+    const face = node.variant === 'face';
+    ctx.fillStyle = face ? '#33334a' : '#4b4b55';
+    roundRect(ctx, x, y, w, h, Math.max(3, w * (face ? 0.12 : 0.14)));
+    ctx.fill();
+    ctx.strokeStyle = '#6b6b7a';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = '#c7c7d1';
+    ctx.textAlign = 'center';
+    ctx.font = `700 ${h * (face ? 0.5 : 0.62)}px ${FONT}`;
+    ctx.fillText('?', x + w * 0.5, y + h * (face ? 0.66 : 0.72));
+    return;
+  }
   const color = SUIT_COLOR[card.suit];
   if (node.variant === 'face') {
     ctx.fillStyle = '#fdfdfb';

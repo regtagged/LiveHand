@@ -62,6 +62,8 @@ export function createHand(overrides = {}) {
     board: [],
     actions: [],
     winners: [],
+    // A hand posted as a question is often posted without the answer.
+    hideHeroCards: false,
     note: '',
   };
   return { ...hand, ...overrides, players: overrides.players || hand.players };
@@ -190,5 +192,6 @@ export function reviveHand(raw) {
     actions: raw.actions || [],
     winners: raw.winners || [],
     straddles: raw.straddles || [],
+    hideHeroCards: !!raw.hideHeroCards,
   };
 }

@@ -152,3 +152,65 @@ test('a hand that ends before showdown still exports', () => {
   assert.ok(sceneToSvg(buildGgSheet(hand, state)).length > 500);
   assert.ok(sceneToSvg(buildTableSheet(hand, state)).length > 500);
 });
+
+/** The 4-bet jam nobody has answered yet — the reason to post a hand at all. */
+function unansweredJam() {
+  const hand = buildHand({
+    tableSize: 8, scheme: 'standard', unit: 'bb', sb: 0.5, bb: 1, ante: 1, anteMode: 'bb',
+    seats: { SB: 0, BB: { stack: 45, cards: 'AhKh' }, CO: 60 },
+    hero: 'BB',
+    actions: [
+      raise('CO', 2.5), fold('SB'), raise('BB', 9), raise('CO', 60),
+    ],
+  });
+  return { ...hand, tournament: 'Bounty Hunters HR' };
+}
+
+test('a hand can stop on the decision, and every export says so', () => {
+  const hand = unansweredJam();
+  const state = replay(hand);
+
+  assert.equal(state.status, 'betting');
+  assert.equal(state.toAct, 'BB', 'it is the hero who has been left with the question');
+
+  const text = toTextHH(hand, state);
+  assert.match(text, /^\*\*\* HAND POSTED UNFINISHED \*\*\* Action on BB — 35 BB to call$/m);
+  assert.match(text, /^Pot so far /m, 'not a total: the hand is not over');
+  assert.ok(!text.includes('*** SHOW DOWN ***'));
+  assert.ok(!text.includes('collected'));
+  assert.match(text, /^Seat 2: BB \(big blind\) is still to act$/m);
+  assert.match(text, /^Seat 3: CO is still in the hand$/m);
+
+  assert.match(svgText(sceneToSvg(buildGgSheet(hand, state))), /Action on BB — 35 BB to call/);
+  assert.match(svgText(sceneToSvg(buildTableSheet(hand, state))), /Action on BB — 35 BB to call/);
+
+  const { frames, meta } = buildFrames(hand, state);
+  assert.equal(meta.unfinished, true);
+  assert.equal(frames.at(-1).caption, 'Action on BB — 35 BB to call');
+  // The jam is still sitting on the felt rather than being swept away.
+  assert.equal(frames.at(-1).players.find((p) => p.position === 'CO').bet, '60 BB');
+});
+
+test('a mystery hand never leaks the hero cards into any export', () => {
+  const hand = { ...unansweredJam(), hideHeroCards: true };
+  const state = replay(hand);
+
+  const text = toTextHH(hand, state);
+  assert.match(text, /^Dealt to BB \[\?\? \?\?\]$/m);
+  const gg = sceneToSvg(buildGgSheet(hand, state));
+  const table = sceneToSvg(buildTableSheet(hand, state));
+  const replayer = toReplayerHtml(hand, state);
+
+  for (const [name, output] of [['text', text], ['gg', gg], ['table', table], ['replayer', replayer]]) {
+    assert.ok(!/A[h♥]\s*K[h♥]/.test(output), `${name} must not show the hand`);
+    assert.ok(!output.includes('"Ah"'), `${name} must not carry the cards as data`);
+    assert.ok(!output.includes('"Kh"'), `${name} must not carry the cards as data`);
+  }
+  assert.match(replayer, /"hidden":true/);
+});
+
+test('showing the cards again puts them back', () => {
+  const hand = { ...unansweredJam(), hideHeroCards: false };
+  const text = toTextHH(hand, replay(hand));
+  assert.match(text, /^Dealt to BB \[Ah Kh\]$/m);
+});

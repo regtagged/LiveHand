@@ -40,6 +40,18 @@ function faceCard(node) {
   ].join('');
 }
 
+/** A card the player has chosen not to show. */
+function hiddenCard(node) {
+  const { x, y, w, h } = node;
+  const face = node.variant === 'face';
+  return [
+    roundRect(x, y, w, h, Math.max(3, w * (face ? 0.12 : 0.14)),
+      `fill="${face ? '#33334a' : '#4b4b55'}" stroke="#6b6b7a" stroke-width="1"`),
+    `<text x="${(x + w * 0.5).toFixed(2)}" y="${(y + h * (face ? 0.66 : 0.72)).toFixed(2)}" font-family="${FONT}"` +
+      ` font-size="${(h * (face ? 0.5 : 0.62)).toFixed(1)}" font-weight="700" fill="#c7c7d1" text-anchor="middle">?</text>`,
+  ].join('');
+}
+
 function nodeToSvg(node) {
   switch (node.type) {
     case 'rect': {
@@ -69,6 +81,7 @@ function nodeToSvg(node) {
       return `<text x="${node.x.toFixed(2)}" y="${node.y.toFixed(2)}" font-family="${FONT}" font-size="${node.size}">${spans}</text>`;
     }
     case 'card':
+      if (!node.card) return hiddenCard(node);
       return node.variant === 'face' ? faceCard(node) : solidCard(node);
     default:
       return '';

@@ -9,9 +9,9 @@
 
 import { equityByStreet } from '../core/equity.js';
 import { STREET_LABEL } from '../core/engine.js';
-import { ggPhrase, money, titleLine, postsSummary } from '../core/narrate.js';
+import { ggPhrase, money, titleLine, postsSummary, isUnfinished, openQuestion } from '../core/narrate.js';
 import { actionOrder } from '../core/positions.js';
-import { Scene, flowRuns, cardRow } from './scene.js';
+import { Scene, flowRuns, cardRow, hiddenCardRow } from './scene.js';
 
 const INK = '#1d1d1f';
 const HERO = '#0a8f28';
@@ -57,10 +57,12 @@ export function buildGgSheet(hand, state, { width = 760 } = {}) {
   if (postRuns.length) y = flowRuns(scene, postRuns, { x, y, maxWidth, size: SIZE }) + LINE * 0.4;
 
   const hero = state.players.find((p) => p.isHero);
-  if (hero && hero.cards.length) {
+  const hidden = !!hand.hideHeroCards;
+  if (hero && (hidden || hero.cards.length)) {
     scene.text(x, y, `Dealt to ${hero.name}:`, { size: SIZE, weight: 700, fill: HERO });
     y += LINE * 0.5;
-    cardRow(scene, hero.cards, { x, y, size: CARD });
+    if (hidden) hiddenCardRow(scene, 2, { x, y, size: CARD });
+    else cardRow(scene, hero.cards, { x, y, size: CARD });
     y += CARD * 1.08 + LINE * 1.1;
   }
 
@@ -88,6 +90,12 @@ export function buildGgSheet(hand, state, { width = 760 } = {}) {
     y = flowRuns(scene, runs, { x, y, maxWidth, size: SIZE }) + LINE * 0.45;
   }
 
+  const question = isUnfinished(state) ? openQuestion(state, hand) : '';
+  if (question) {
+    scene.text(x, y, question, { size: SIZE + 1, weight: 700, fill: HERO });
+    y += LINE * 1.2;
+  }
+
   y = drawShowdown(scene, hand, state, { x, y, maxWidth });
 
   for (const entry of state.returns || []) {
@@ -109,7 +117,9 @@ export function buildGgSheet(hand, state, { width = 760 } = {}) {
 }
 
 function drawShowdown(scene, hand, state, { x, y }) {
-  const shown = (state.showdown || []).filter((s) => s.cards && s.cards.length === 2);
+  const shown = (state.showdown || [])
+    .filter((s) => s.cards && s.cards.length === 2)
+    .filter((s) => !(s.isHero && hand.hideHeroCards));
   if (state.status !== 'showdown' || !shown.length) return y;
 
   // Equity is only meaningful when every hand at showdown is known.

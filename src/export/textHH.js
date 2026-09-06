@@ -11,7 +11,7 @@ import { fmtAmount } from '../core/amount.js';
 import { cardStr, cardsStr } from '../core/cards.js';
 import { seatRing } from '../core/positions.js';
 import { STREETS } from '../core/engine.js';
-import { pokerStarsLine, stakesLabel } from '../core/narrate.js';
+import { pokerStarsLine, stakesLabel, isUnfinished, openQuestion } from '../core/narrate.js';
 
 const STREET_HEADER = { flop: 'FLOP', turn: 'TURN', river: 'RIVER' };
 
@@ -71,10 +71,10 @@ export function toTextHH(hand, state) {
   }
 
   out.push('*** HOLE CARDS ***');
-  for (const player of state.players) {
-    if (player.cards && player.cards.length === 2 && player.isHero) {
-      out.push(`Dealt to ${player.name} [${cardsStr(player.cards)}]`);
-    }
+  const hero = state.players.find((p) => p.isHero);
+  if (hero) {
+    if (hand.hideHeroCards) out.push(`Dealt to ${hero.name} [?? ??]`);
+    else if (hero.cards && hero.cards.length === 2) out.push(`Dealt to ${hero.name} [${cardsStr(hero.cards)}]`);
   }
 
   for (const streetId of STREETS) {
@@ -89,7 +89,16 @@ export function toTextHH(hand, state) {
     }
   }
 
-  const shown = (state.showdown || []).filter((s) => s.cards && s.cards.length === 2);
+  const unfinished = isUnfinished(state);
+  if (unfinished) {
+    const question = openQuestion(state, hand);
+    if (question) out.push(`*** HAND POSTED UNFINISHED *** ${question}`);
+    else out.push('*** HAND POSTED UNFINISHED ***');
+  }
+
+  const shown = (state.showdown || [])
+    .filter((s) => s.cards && s.cards.length === 2)
+    .filter((s) => !(s.isHero && hand.hideHeroCards));
   if (state.status === 'showdown' && shown.length) {
     out.push('*** SHOW DOWN ***');
     for (const s of shown) {
@@ -103,7 +112,7 @@ export function toTextHH(hand, state) {
   }
 
   out.push('*** SUMMARY ***');
-  out.push(`Total pot ${money(state.pot)} | Rake 0`);
+  out.push(`${unfinished ? 'Pot so far' : 'Total pot'} ${money(state.pot)} | Rake 0`);
   if (state.board.length) out.push(`Board [${cardsStr(state.board)}]`);
 
   for (const player of state.players) {
@@ -120,6 +129,9 @@ export function toTextHH(hand, state) {
       tail = `showed [${cardsStr(show.cards)}] and lost${show.hand ? ` with ${show.hand.name}` : ''}`;
     } else if (player.folded) {
       tail = 'folded';
+    } else if (unfinished) {
+      // Nobody mucked anything: the hand simply has not got there yet.
+      tail = state.toAct === player.position ? 'is still to act' : 'is still in the hand';
     } else {
       tail = 'mucked';
     }

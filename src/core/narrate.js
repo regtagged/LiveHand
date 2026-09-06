@@ -102,3 +102,28 @@ export function nameOf(state, position) {
   const player = state.players.find((p) => p.position === position);
   return player ? player.name : position;
 }
+
+/**
+ * A hand can be posted before it is over — that is usually the whole point of
+ * posting it. Anything still awaiting an action or a card is unfinished, and
+ * every export has to say so rather than quietly implying a result.
+ */
+export function isUnfinished(state) {
+  return state.status === 'betting' || state.status === 'awaiting-board';
+}
+
+/** "Action on Hero (BB) — 12.5 BB to call", or '' if the hand did finish. */
+export function openQuestion(state, hand) {
+  if (state.status !== 'betting' || !state.toAct || !state.legal) return '';
+  const player = state.players.find((p) => p.position === state.toAct);
+  const who = player.name === player.position ? player.position : `${player.name} (${player.position})`;
+  const facing = state.legal.toCall > 0
+    ? `${money(state.legal.toCall, hand, 'bb')} to call`
+    : 'checked to them';
+  return `Action on ${who} — ${facing}`;
+}
+
+/** Whether the hero's cards should be shown at all. */
+export function heroCardsHidden(hand) {
+  return !!hand.hideHeroCards;
+}
