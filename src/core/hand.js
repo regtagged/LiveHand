@@ -51,7 +51,7 @@ export function createHand(overrides = {}) {
     sb: unit === 'bb' ? toUnits(0.5) : 0,
     bb: unit === 'bb' ? toUnits(1) : 0,
     ante: 0,
-    anteMode: 'none',
+    anteMode: 'bb',
     tableSize,
     scheme,
     // Only the blinds to begin with. Most shared hands name three or four
@@ -130,11 +130,15 @@ export function validateSetup(hand) {
   for (const required of REQUIRED_POSITIONS) {
     if (!hand.players.some((p) => p.position === required)) problems.push(`${required} must be in the hand.`);
   }
-  const noStack = hand.players.filter((p) => !p.stack || p.stack <= 0).map((p) => p.position);
-  if (noStack.length) problems.push(`Enter a stack for ${noStack.join(', ')}.`);
+  // Only your own stack is required. A blind that folds out of the way is still
+  // in the hand — it has to post — but making someone look up a stack they
+  // never saw, for a seat that did nothing, is busywork; those are left unknown
+  // and treated as covering whatever they face.
+  const hero = hand.players.find((p) => p.isHero);
+  if (!hero) problems.push('Pick which seat is you.');
+  else if (!hero.stack || hero.stack <= 0) problems.push('Enter your own stack.');
   const short = hand.players.filter((p) => p.stack > 0 && p.stack < hand.bb).map((p) => p.position);
   if (short.length) problems.push(`${short.join(', ')} ${short.length > 1 ? 'have' : 'has'} less than one big blind — check the units.`);
-  if (!hand.players.some((p) => p.isHero)) problems.push('Pick which seat is you.');
   return problems;
 }
 

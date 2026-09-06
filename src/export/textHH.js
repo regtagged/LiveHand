@@ -56,8 +56,10 @@ export function toTextHH(hand, state) {
   const buttonPosition = hand.players.some((p) => p.position === 'BTN') ? 'BTN' : 'SB';
   out.push(`Table '${tournament}' ${hand.tableSize}-max Seat #${seats.get(buttonPosition)} is the button`);
 
-  for (const player of hand.players) {
-    out.push(`Seat ${seats.get(player.position)}: ${player.name} (${money(player.startingStack ?? player.stack)} in chips)`);
+  for (const player of state.players) {
+    // A seat whose stack was never entered says so rather than inventing one.
+    const chips = player.unknownStack ? 'unknown' : money(player.startingStack);
+    out.push(`Seat ${seats.get(player.position)}: ${player.name} (${chips} in chips)`);
   }
 
   for (const post of state.posts) {

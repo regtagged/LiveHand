@@ -34,16 +34,25 @@ npm test    # 35 tests, Node's built-in runner
 
 ## The flow
 
-**1 · Session.** Tournament name if you want one — it's optional, and there's a
-dropdown of recent ones since the blinds and table size usually repeat — then
-whether you're typing *chips* or *big blinds*, the blinds themselves, and the
-ante. A big blind ante needs no size: it is one big blind by definition, so it
-follows the blind rather than being typed and going stale at the next level.
+**1 · Session.** Skippable — the defaults are 0.5/1 with a big blind ante, and
+there's a **Skip** button that goes straight to the table. Otherwise: a
+tournament name if you want one (optional, with a dropdown of recent ones since
+the blinds and table size usually repeat), whether you're typing *chips* or
+*big blinds*, the blinds, and the ante. A big blind ante needs no size — it is
+one big blind by definition, so it follows the blind rather than being typed and
+going stale at the next level.
 
 **2 · Table.** Eight seats by default, all switched off except the blinds.
 Switch on the ones that were in the hand — most shared hands name three or four
-players — enter their stacks, tap **YOU** on your seat, and pick your two cards.
-Nothing is ever made hero for you.
+players — tap **YOU** on your seat, and pick your two cards. Nothing is ever
+made hero for you.
+
+**Only your own stack is required.** A blind that posts and folds is in the hand
+whether you looked its stack up or not, so leaving it blank is fine: the engine
+treats an unentered stack as unknown and assumes it covers whatever it faces,
+and every export prints it as unknown rather than inventing a number. Seats you
+never switched on still appear on the Table View felt, empty, so the picture
+shows the table that was really there.
 
 Cards are picked from the whole deck at once: four rows of thirteen in
 four-colour, so any card is a single tap and a flop is three.
@@ -147,6 +156,9 @@ root or from a project subpath.
 - **Positions are always LJ/HJ.** The core still knows GG's MP/MP1 naming
   (`seatRing(n, 'gg')`) and the tests use it, but the app no longer offers the
   choice.
+- **An unknown stack prints as `(unknown in chips)`** in the text history. That
+  is honest, but it is not a number, so a strict third-party parser may reject
+  the line — fill the stack in if you need that hand to import somewhere.
 - **Run-it-twice and rake aren't modelled.** Every pot is awarded once, and the
   summary line prints `Rake 0`.
 - **Preflop equity is sampled**, not enumerated — 25,000 run-outs off a fixed

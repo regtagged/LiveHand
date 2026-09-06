@@ -37,7 +37,8 @@ export function buildGgSheet(hand, state, { width = 760 } = {}) {
     const player = state.players.find((p) => p.position === position);
     if (!player) continue;
     const who = player.name === position ? position : `${player.name} (${position})`;
-    const text = `${who}: ${money(player.startingStack, hand, 'bb')}`;
+    const stack = player.unknownStack ? 'unknown stack' : money(player.startingStack, hand, 'bb');
+    const text = `${who}: ${stack}`;
     scene.text(x, y, text, {
       size: SIZE, weight: player.isHero ? 700 : 400, fill: player.isHero ? HERO : INK,
     });

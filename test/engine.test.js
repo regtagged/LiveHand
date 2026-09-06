@@ -240,3 +240,40 @@ test('a winner can be named when villain cards were never seen', () => {
   assert.equal(named.settled, true);
   assert.equal(bbOf(named.winners[0].amount), 6.5);
 });
+
+test('a blind with no stack entered can still post, fold, and be called', () => {
+  // Only the hero's stack is known. The blinds are in the hand because they
+  // post, but nobody looked up what they had — they must not be treated as
+  // sitting there with zero chips.
+  const state = replay(buildHand({
+    tableSize: 6, scheme: 'standard', unit: 'bb', sb: 0.5, bb: 1,
+    seats: { SB: 0, BB: 0, CO: 0, BTN: 40 },
+    hero: 'BTN',
+    actions: [fold('CO'), raise('BTN', 3), fold('SB')],
+  }));
+
+  const sb = state.players.find((p) => p.position === 'SB');
+  assert.equal(sb.unknownStack, true);
+  assert.equal(sb.folded, true);
+  assert.equal(sb.allIn, false, 'posting a blind does not put an unknown stack all-in');
+  assert.equal(bbOf(sb.contributed), 0.5);
+
+  // The big blind is still to act, and is not capped at zero.
+  assert.equal(state.toAct, 'BB');
+  assert.equal(state.legal.unknownStack, true);
+  assert.equal(bbOf(state.legal.toCall), 2, 'they can call the raise in full');
+});
+
+test('an unknown stack can win a pot without a stack ever being invented', () => {
+  const state = replay(buildHand({
+    tableSize: 6, scheme: 'standard', unit: 'bb', sb: 0.5, bb: 1,
+    seats: { SB: 0, BB: 0, CO: 0, BTN: 40 },
+    hero: 'BTN',
+    actions: [fold('CO'), raise('BTN', 3), fold('SB'), raise('BB', 9), fold('BTN')],
+  }));
+  assert.equal(state.status, 'complete');
+  assert.equal(state.winners[0].position, 'BB');
+  // BTN's 3 plus the SB's 0.5 plus the 3 of the BB's raise that BTN matched.
+  assert.equal(bbOf(state.winners[0].amount), 6.5);
+  assert.deepEqual(state.returns.map((r) => [r.position, bbOf(r.amount)]), [['BB', 6]]);
+});

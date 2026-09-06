@@ -11,6 +11,7 @@
 import { cardsStr } from '../core/cards.js';
 import { STREET_LABEL } from '../core/engine.js';
 import { bubbleText, money, titleLine } from '../core/narrate.js';
+import { seatRing } from '../core/positions.js';
 import { Scene, measureText, cardRow } from './scene.js';
 
 const FELT = '#1f5c3d';
@@ -51,8 +52,23 @@ export function buildTableSheet(hand, state, { width = 840 } = {}) {
   return scene.finish(y);
 }
 
+/**
+ * Every seat at the table, not just the ones the hand names.
+ *
+ * A hand shared as "CO opens, I call in the BB" is still played at an eight
+ * handed table, and drawing it as a three handed one misreads the spot. Seats
+ * nobody entered a stack for are drawn empty, so the picture shows the table
+ * that was actually there.
+ */
+function seatList(hand, state) {
+  const seated = new Map(state.players.map((player) => [player.position, player]));
+  return seatRing(hand.tableSize, hand.scheme).map(
+    (position) => seated.get(position) || { position, name: position, cards: [], empty: true },
+  );
+}
+
 function drawTable(scene, hand, state, { y, width, pad }) {
-  const players = orderedFromHero(state.players);
+  const players = orderedFromHero(seatList(hand, state));
   const boxW = players.length > 7 ? 112 : 128;
   const boxH = 50;
   const height = players.length > 6 ? 344 : 300;
@@ -97,6 +113,13 @@ function drawTable(scene, hand, state, { y, width, pad }) {
 }
 
 function drawSeat(scene, hand, state, player, { x, y, w, h }) {
+  if (player.empty) {
+    scene.rect(x, y, w, h, { rx: 9, fill: '#191920', stroke: '#33333c', strokeWidth: 1 });
+    scene.text(x + 9, y + 19, player.position, { size: 13, weight: 700, fill: '#57575f' });
+    scene.text(x + 9, y + 37, 'no stack', { size: 12, fill: '#3f3f47' });
+    return;
+  }
+
   const won = (state.winners || []).some((entry) => entry.position === player.position);
   const border = won ? '#facc15' : player.isHero ? '#4ade80' : '#52525b';
   scene.rect(x, y, w, h, {
@@ -116,8 +139,8 @@ function drawSeat(scene, hand, state, player, { x, y, w, h }) {
   if (named) {
     scene.text(x + w - 9, y + 19, player.position, { size: 11, weight: 700, fill: MUTED, anchor: 'end' });
   }
-  scene.text(x + 9, y + 37, money(player.stack, hand, 'bb'), {
-    size: 13, fill: player.folded ? '#52525b' : '#7dd3fc',
+  scene.text(x + 9, y + 37, player.unknownStack ? '—' : money(player.stack, hand, 'bb'), {
+    size: 13, fill: player.unknownStack ? '#57575f' : player.folded ? '#52525b' : '#7dd3fc',
   });
 
   if (player.cards && player.cards.length === 2) {
@@ -182,6 +205,7 @@ function summaryLine(hand, state) {
 /** Hero first, then round the table in seat order. */
 function orderedFromHero(players) {
   const heroIndex = players.findIndex((p) => p.isHero);
+  if (heroIndex < 0) return players;
   if (heroIndex <= 0) return players;
   return [...players.slice(heroIndex), ...players.slice(0, heroIndex)];
 }

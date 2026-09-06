@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { seatRing, preflopRing, postflopRing, actionOrder } from '../src/core/positions.js';
 import {
-  createHand, togglePlayer, resizeTable, setHero, validateSetup, reviveHand, nextHand,
-  anteAmount,
+  createHand, togglePlayer, resizeTable, setHero, updatePlayer, validateSetup, reviveHand,
+  nextHand, anteAmount,
 } from '../src/core/hand.js';
 import { evaluate } from '../src/core/evaluate.js';
 import { equity } from '../src/core/equity.js';
@@ -36,6 +36,7 @@ test('dropping seats keeps the survivors in the right order', () => {
 test('a new hand starts with the blinds only, and nobody as hero', () => {
   const hand = createHand();
   assert.equal(hand.tableSize, 8);
+  assert.equal(hand.anteMode, 'bb', 'a big blind ante is the modern default');
   assert.deepEqual(hand.players.map((p) => p.position), ['SB', 'BB']);
   assert.ok(!hand.players.some((p) => p.isHero), 'the hero is chosen, never guessed');
   assert.ok(validateSetup(hand).some((p) => /Pick which seat is you/.test(p)));
@@ -77,11 +78,23 @@ test('resizing does not switch seats back on that were left off', () => {
 
 test('setup problems are reported as sentences, and clear when fixed', () => {
   let hand = createHand({ tableSize: 6 });
-  assert.ok(validateSetup(hand).some((p) => /Enter a stack/.test(p)));
+  assert.ok(validateSetup(hand).some((p) => /Pick which seat is you/.test(p)));
   hand = togglePlayer(hand, 'BTN', true);
-  hand = { ...hand, players: hand.players.map((p) => ({ ...p, stack: toUnits(40) })) };
   hand = setHero(hand, 'BTN');
+  assert.ok(validateSetup(hand).some((p) => /Enter your own stack/.test(p)));
+  hand = updatePlayer(hand, 'BTN', { stack: toUnits(40) });
+  assert.deepEqual(validateSetup(hand), [], 'the blinds need no stack of their own');
+});
+
+test('only your own stack is required', () => {
+  let hand = createHand({ tableSize: 6 });
+  hand = togglePlayer(hand, 'CO', true);
+  hand = setHero(hand, 'CO');
+  hand = updatePlayer(hand, 'CO', { stack: toUnits(40) });
+  // SB and BB are in the hand because they post, but nobody looked up what
+  // they had, and the hand is still perfectly exportable.
   assert.deepEqual(validateSetup(hand), []);
+  assert.ok(hand.players.filter((p) => !p.isHero).every((p) => p.stack === 0));
 });
 
 test('a big blind ante is one big blind, with no size to enter', () => {

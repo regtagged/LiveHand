@@ -23,6 +23,16 @@ import { anteAmount } from './hand.js';
 export const STREETS = ['preflop', 'flop', 'turn', 'river'];
 export const STREET_LABEL = { preflop: 'Preflop', flop: 'Flop', turn: 'Turn', river: 'River' };
 
+/**
+ * The stack given to a seat nobody entered one for.
+ *
+ * Large enough that the engine never caps such a player, so an unlisted blind
+ * can post and fold — or call, if that is what happened — without a stack the
+ * user never knew. It is a sentinel, not a number to show anyone: every
+ * display checks `unknownStack` and prints a dash instead.
+ */
+export const UNKNOWN_STACK = Math.floor(Number.MAX_SAFE_INTEGER / 8);
+
 /** How many board cards are showing once the named street is dealt. */
 export const BOARD_LENGTH = { preflop: 0, flop: 3, turn: 4, river: 5 };
 
@@ -33,13 +43,15 @@ function boardFor(hand, street) {
 function initRuntime(hand) {
   const runtime = new Map();
   for (const p of hand.players) {
+    const unknownStack = !p.stack || p.stack <= 0;
     runtime.set(p.position, {
       position: p.position,
       name: p.name || p.position,
       isHero: !!p.isHero,
       cards: p.cards || [],
-      startingStack: p.stack,
-      stack: p.stack,
+      unknownStack,
+      startingStack: unknownStack ? UNKNOWN_STACK : p.stack,
+      stack: unknownStack ? UNKNOWN_STACK : p.stack,
       contributed: 0,   // everything out of the stack this hand, antes included
       wagered: 0,       // contributions other than antes — drives side pots
       streetCommit: 0,  // this street only — drives what's owed
@@ -169,6 +181,7 @@ export function legalFor(player, ctx) {
   const rawMinTo = betToCall > 0 ? betToCall + minRaiseIncrement : minRaiseIncrement;
   return {
     position: player.position,
+    unknownStack: !!player.unknownStack,
     canFold: true,
     canCheck: betToCall <= player.streetCommit,
     toCall,

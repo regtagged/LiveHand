@@ -124,6 +124,14 @@ function renderSession() {
   const hand = app.hand;
   const sessions = store.recentSessions();
   return `
+  <div class="card skipbar">
+    <div>
+      <strong>${esc(stakesLabel(hand))}</strong>
+      <span class="hint">Nothing here is required — change what you need, or go straight in.</span>
+    </div>
+    <button class="ghost" data-act="goto" data-step="1">Skip</button>
+  </div>
+
   <div class="card">
     <h2>Session</h2>
     <div class="field">
@@ -211,7 +219,8 @@ function renderTable() {
     <h2>Seats and stacks <button class="ghost" data-act="toggle-names" style="float:right;margin-top:-4px">
       ${app.ui.showNames ? 'Hide names' : 'Names'}</button></h2>
     <p class="hint" style="margin:0 0 10px">Switch on the seats that were in the hand and enter their
-      stacks in ${unitLabel()}, as they were when it started. The blinds are always in.</p>
+      stacks in ${unitLabel()}, as they were when it started. The blinds are always in — leave a stack
+      blank for anyone who just posts and folds.</p>
     <div class="seatgrid">
       ${ring.map((position) => {
         const player = hand.players.find((p) => p.position === position);
@@ -279,12 +288,13 @@ function renderAction() {
 function playerCard(player, state) {
   const acting = state.toAct === player.position;
   const last = lastActionFor(state, player.position);
-  const depth = app.hand.unit === 'chips' && app.hand.bb
+  const depth = !player.unknownStack && app.hand.unit === 'chips' && app.hand.bb
     ? `${fmtAmount(toBb(player.stack, app.hand.bb), 'bb')} BB` : '';
+  const stackText = player.unknownStack ? '—' : showAmount(player.stack);
   return `<div class="pcard ${player.folded ? 'folded' : ''} ${player.isHero ? 'hero' : ''} ${acting ? 'acting' : ''}">
     <div class="pos">${player.position}${player.isHero ? ' · you' : ''}</div>
     <div class="nm">${esc(player.name === player.position ? (depth || ' ') : player.name)}</div>
-    <div class="stack">${showAmount(player.stack)}${player.allIn ? ' · AI' : ''}</div>
+    <div class="stack">${stackText}${player.allIn ? ' · AI' : ''}</div>
     <div class="bet">${player.streetCommit ? showAmount(player.streetCommit) : ' '}</div>
     <div class="did">${last ? esc(last) : ' '}</div>
     ${player.cards && player.cards.length
@@ -356,7 +366,8 @@ function renderActionBar(state) {
   return `<div class="actionbar">
     <div class="who">
       <b>${esc(who(player))}${player.isHero ? ' · you' : ''}</b>
-      <span>${showAmount(player.stack)} behind${legal.toCall ? ` · ${showAmount(legal.toCall)} to call` : ''}</span>
+      <span>${legal.unknownStack ? 'stack not entered' : `${showAmount(player.stack)} behind`}${
+        legal.toCall ? ` · ${showAmount(legal.toCall)} to call` : ''}</span>
     </div>
     <div class="verbs">
       <button class="fold" data-act="act" data-kind="fold">Fold</button>
@@ -401,23 +412,25 @@ function presetButtons(legal) {
       <b>${pct}%</b><i>${showAmount(total)}</i></button>`);
   }
 
-  buttons.push(`<button class="allin" data-act="size-apply" data-mode="amount" data-value="${fromUnits(legal.maxTo)}">
-    <b>All-in</b><i>${showAmount(legal.maxTo)}</i></button>`);
+  if (!legal.unknownStack) {
+    buttons.push(`<button class="allin" data-act="size-apply" data-mode="amount" data-value="${fromUnits(legal.maxTo)}">
+      <b>All-in</b><i>${showAmount(legal.maxTo)}</i></button>`);
+  }
   return buttons;
 }
 
 function sizeMeta(legal) {
+  const max = legal.unknownStack ? 'no stack entered' : `Max ${showAmount(legal.maxTo)}`;
   const raw = parseFloat(app.ui.sizeValue);
   if (!Number.isFinite(raw)) {
-    return `<div class="sizemeta"><span>Min ${showAmount(legal.minTo)}</span>
-      <span>Max ${showAmount(legal.maxTo)}</span></div>`;
+    return `<div class="sizemeta"><span>Min ${showAmount(legal.minTo)}</span><span>${max}</span></div>`;
   }
   const total = sizeToTotal(legal, app.ui.sizeMode, raw, app.hand);
   const wanted = app.ui.sizeMode === 'pct'
     ? total
     : Math.round(app.ui.sizeMode === 'bb' ? raw * app.hand.bb : toUnits(raw));
   // The engine would cap this anyway; saying so up front is less surprising.
-  const capped = wanted > legal.maxTo;
+  const capped = !legal.unknownStack && wanted > legal.maxTo;
   return `<div class="sizemeta">
     <span class="${capped ? 'over' : ''}">${capped
       ? `Only ${showAmount(legal.maxTo)} behind — capped`
