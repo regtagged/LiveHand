@@ -46,9 +46,13 @@ going stale at the next level.
 **2 · Table.** Eight seats by default, all switched off except the blinds.
 Switch on the ones that were in the hand — most shared hands name three or four
 players — and tap **YOU** on your seat, which seats you if you weren't already
-and opens the deck for your two cards. Nothing is ever made hero for you. Your
-stack is a row of one-tap depths (20/30/40/60/100 bb) or an exact number if you
-want one.
+and opens the deck for your two cards. Nothing is ever made hero for you.
+
+Any seat that still needs a stack offers one-tap depths (20/30/40/60/100 bb),
+or you can type an exact number. They appear for your own seat and for anyone
+you deliberately switched on — never for a blind you left alone, since those
+are in the hand only because they post. A villain needs a stack for **All-in**
+to mean anything, so give the aggressor a depth if the hand ends in a jam.
 
 **Only your own stack is required.** A blind that posts and folds is in the hand
 whether you looked its stack up or not, so leaving it blank is fine: the engine

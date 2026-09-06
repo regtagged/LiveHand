@@ -12,7 +12,7 @@ import { RANKS, SUITS, SUIT_GLYPH, SUIT_NAME, cardStr, sameCard } from './src/co
 import { replay, sizeToTotal, withAction, withoutLastAction, STREET_LABEL, BOARD_LENGTH } from './src/core/engine.js';
 import {
   createHand, resizeTable, togglePlayer, setHero, updatePlayer, validateSetup,
-  usedCards, reviveHand, nextHand, anteAmount, heroOf,
+  usedCards, reviveHand, nextHand, anteAmount, heroOf, REQUIRED_POSITIONS,
 } from './src/core/hand.js';
 import { money, stakesLabel, isUnfinished, openQuestion } from './src/core/narrate.js';
 import { seatRing } from './src/core/positions.js';
@@ -250,38 +250,32 @@ function renderTable() {
     <h2>Seats and stacks <button class="ghost" data-act="toggle-names" style="float:right;margin-top:-4px">
       ${app.ui.showNames ? 'Hide names' : 'Names'}</button></h2>
     <p class="hint" style="margin:0 0 10px">Switch on the seats that were in the hand and enter their
-      stacks in ${unitLabel()}, as they were when it started. The blinds are always in — leave a stack
-      blank for anyone who just posts and folds.</p>
+      stacks in ${unitLabel()}. A stack is only needed for seats that put chips in — leave a blind
+      blank if it just posts and folds.</p>
     <div class="seatgrid">
       ${ring.map((position) => {
         const player = hand.players.find((p) => p.position === position);
         const on = included.has(position);
         const locked = position === 'SB' || position === 'BB';
-        return `<div class="seat-row ${on ? '' : 'off'} ${player && player.isHero ? 'hero' : ''}">
-          <button class="toggle" data-act="toggle-seat" data-pos="${position}" aria-pressed="${on}"
-            ${locked ? 'disabled title="Blinds always post"' : ''}>${on ? '&#10003;' : '&#43;'}</button>
-          <span class="pos">${position}</span>
-          <input type="text" inputmode="decimal" data-stack="${position}" ${on ? '' : 'disabled'}
-            value="${player ? amountValue(player.stack) : ''}" placeholder="stack">
-          <button class="herobtn" data-act="set-hero" data-pos="${position}"
-            aria-pressed="${!!(player && player.isHero)}">YOU</button>
-        </div>
-        ${app.ui.showNames && on ? `<div class="seat-row">
-          <span class="pos">${position}</span>
-          <input type="text" data-name="${position}" value="${esc(player.name)}" placeholder="name">
-        </div>` : ''}`;
+        return `<div class="seat-cell">
+          <div class="seat-row ${on ? '' : 'off'} ${player && player.isHero ? 'hero' : ''}">
+            <button class="toggle" data-act="toggle-seat" data-pos="${position}" aria-pressed="${on}"
+              ${locked ? 'disabled title="Blinds always post"' : ''}>${on ? '&#10003;' : '&#43;'}</button>
+            <span class="pos">${position}</span>
+            <input type="text" inputmode="decimal" data-stack="${position}" ${on ? '' : 'disabled'}
+              value="${player ? amountValue(player.stack) : ''}" placeholder="stack">
+            <button class="herobtn" data-act="set-hero" data-pos="${position}"
+              aria-pressed="${!!(player && player.isHero)}">YOU</button>
+          </div>
+          ${app.ui.showNames && on ? `<div class="seat-row">
+            <span class="pos">${position}</span>
+            <input type="text" data-name="${position}" value="${esc(player.name)}" placeholder="name">
+          </div>` : ''}
+          ${offerDepths(player) ? depthRow(position, hand) : ''}
+        </div>`;
       }).join('')}
     </div>
   </div>
-
-  ${hero ? `<div class="card">
-    <h2>Your stack</h2>
-    <div class="presets">
-      ${[20, 30, 40, 60, 100].map((depth) => `<button data-act="depth" data-value="${depth}"
-        aria-pressed="${hero.stack === depth * hand.bb}"><b>${depth}</b><i>BB</i></button>`).join('')}
-    </div>
-    <p class="hint">Or type an exact number next to your seat above.</p>
-  </div>` : ''}
 
   <div class="card">
     <h2>Your cards</h2>
@@ -295,6 +289,26 @@ function renderTable() {
 
   <button class="primary" data-act="goto" data-step="2" ${problems.length ? 'disabled' : ''}>
     Start the hand</button>`;
+}
+
+/**
+ * Whether to offer one-tap depths under a seat.
+ *
+ * Shown for a seat with no stack yet that actually needs one: your own, always,
+ * and anyone you deliberately switched on. Never for a blind you left alone —
+ * those are in the hand only because they post, and prompting for a stack there
+ * would undo the point of stacks being optional.
+ */
+function offerDepths(player) {
+  if (!player || player.stack > 0) return false;
+  return player.isHero || !REQUIRED_POSITIONS.includes(player.position);
+}
+
+function depthRow(position, hand) {
+  return `<div class="presets seat-depths">
+    ${[20, 30, 40, 60, 100].map((depth) => `<button data-act="depth" data-pos="${position}"
+      data-value="${depth}"><b>${depth}</b><i>BB</i></button>`).join('')}
+  </div>`;
 }
 
 function problemsHtml(problems) {
@@ -779,6 +793,18 @@ function goto(step) {
 document.addEventListener('click', (event) => {
   const target = event.target.closest('[data-act], [data-step]');
   if (!target) return;
+  // Without this a thrown handler is a button that silently does nothing, which
+  // is the hardest kind of bug to notice — one dead control on a screen full of
+  // working ones. Say so instead.
+  try {
+    handleClick(target);
+  } catch (error) {
+    console.error(error);
+    toast('Something went wrong with that button');
+  }
+});
+
+function handleClick(target) {
   const act = target.dataset.act;
 
   if (target.matches('.steps button')) { goto(Number(target.dataset.step)); return; }
@@ -793,11 +819,9 @@ document.addEventListener('click', (event) => {
     case 'ante-mode': setHand({ ...app.hand, anteMode: target.dataset.value }); break;
     case 'load-session': loadSession(Number(target.dataset.index)); break;
 
-    case 'depth': {
-      const hero = heroOf(app.hand);
-      if (hero) setHand(updatePlayer(app.hand, hero.position, { stack: Number(target.dataset.value) * app.hand.bb }));
-      break;
-    }
+    case 'depth': setHand(updatePlayer(app.hand, target.dataset.pos, {
+      stack: Number(target.dataset.value) * app.hand.bb,
+    })); break;
     case 'fold-to-me': foldToHero(); break;
     case 'toggle-names': app.ui.showNames = !app.ui.showNames; render(); break;
     case 'toggle-seat': {
@@ -840,7 +864,7 @@ document.addEventListener('click', (event) => {
     case 'save-hand': store.saveHand(app.hand); toast('Hand saved on this device'); break;
     default: break;
   }
-});
+}
 
 sheet.addEventListener('click', (event) => { if (event.target === sheet) closeSheet(); });
 

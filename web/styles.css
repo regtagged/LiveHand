@@ -133,6 +133,11 @@ button.ghost.back { font-size: 20px; line-height: 1; padding: 4px 12px; }
 .seat-row .herobtn { flex: none; padding: 6px 9px; font-size: 11px; font-weight: 700; border-radius: 8px;
   border: 1px solid var(--line); background: var(--panel); color: var(--muted); cursor: pointer; }
 .seat-row .herobtn[aria-pressed='true'] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.seat-cell { display: flex; flex-direction: column; gap: 6px; }
+.seat-depths { margin: 0 0 2px; }
+.seat-depths button { padding: 6px 4px; min-width: 44px; }
+.seat-depths button b { font-size: 12px; }
+.seat-depths button i { margin-top: 0; font-size: 10px; }
 
 /* ---- cards ---- */
 
@@ -153,18 +158,27 @@ button.ghost.back { font-size: 20px; line-height: 1; padding: 4px 12px; }
 .cardslots button { background: none; border: 0; padding: 0; cursor: pointer; }
 
 /* The whole deck at once: four suit rows of thirteen, coloured as a four-colour
-   deck, so any card is a single tap. Thirteen columns is tight on a phone, so
-   the rank scales with the cell and the suit sits behind it as a watermark. */
-.deck { display: grid; grid-template-columns: repeat(13, 1fr); gap: 3px; }
+   deck, so any card is a single tap.
+   Thirteen columns across a phone is the tightest thing in the app, so the deck
+   runs edge to edge (cancelling the sheet's padding) to buy every pixel it can,
+   and `minmax(0, 1fr)` lets the columns shrink below their content instead of
+   overflowing the panel. Sizes are in container units so a rank scales with its
+   own card rather than with the viewport — the panel stops growing at 520px,
+   and a viewport-based size would keep growing past it. */
+.deck { display: grid; grid-template-columns: repeat(13, minmax(0, 1fr)); gap: 2px;
+  margin-inline: -12px; padding-inline: 4px; container-type: inline-size; }
 .deck-card {
   position: relative; display: grid; place-items: center; overflow: hidden;
   aspect-ratio: 3 / 4; padding: 0; border: 0; border-radius: 4px; cursor: pointer;
   color: #fff; font-family: inherit;
 }
-.deck-card b { position: relative; z-index: 1; font-size: clamp(11px, 3.4vw, 18px); font-weight: 800; }
+.deck-card b { position: relative; z-index: 1; font-weight: 800;
+  font-size: clamp(11px, 3.4vw, 18px); font-size: clamp(11px, 4.4cqw, 20px); }
+/* The suit sits centred behind the rank, as a watermark rather than a corner pip. */
 .deck-card i {
-  position: absolute; right: -12%; bottom: -22%; z-index: 0;
-  font-size: clamp(20px, 6vw, 32px); font-style: normal; opacity: .3; line-height: 1;
+  position: absolute; inset: 0; z-index: 0; display: grid; place-items: center;
+  font-style: normal; opacity: .3; line-height: 1;
+  font-size: clamp(16px, 5.6vw, 30px); font-size: clamp(16px, 6.4cqw, 34px);
 }
 .deck-card:disabled { opacity: .18; cursor: default; }
 .deck-card:not(:disabled):active { transform: scale(.92); }
@@ -281,11 +295,17 @@ button.ghost.back { font-size: 20px; line-height: 1; padding: 4px 12px; }
 
 /* ---- sheet + toast ---- */
 
-.sheet { position: fixed; inset: 0; z-index: 40; background: #000000aa; display: flex; align-items: flex-end; justify-content: center; }
+/* dvh, not vh: on mobile Safari `vh` is the viewport *without* the address bar,
+   so a sheet anchored to the bottom has its last row hidden behind the browser
+   chrome. The vh line stays first as a fallback for anything without dvh. */
+.sheet { position: fixed; inset: 0; z-index: 40; background: #000000aa;
+  display: flex; align-items: flex-end; justify-content: center;
+  height: 100vh; height: 100dvh; }
 .sheet-panel {
-  width: 100%; max-width: 520px; max-height: 86vh; overflow-y: auto;
+  width: 100%; max-width: 520px; overflow-y: auto;
+  max-height: 86vh; max-height: 86dvh;
   background: var(--panel); border: 1px solid var(--line); border-radius: 16px 16px 0 0;
-  padding: 14px 14px calc(18px + var(--safe));
+  padding: 14px 12px calc(18px + var(--safe));
 }
 .sheet-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .sheet-head strong { font-size: 15px; }
