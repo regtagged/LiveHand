@@ -67,10 +67,21 @@ export function buildFrames(hand, state) {
 
   snapshot('preflop', [], 'Blinds posted');
 
-  for (const street of state.streets) {
-    if (street.id !== 'preflop') {
-      collected += players.reduce((sum, p) => sum + p.bet, 0);
+  // Chips that were bet but never matched come back to the player who bet them,
+  // so the stack shown after that street has to grow again.
+  const giveBack = (uncalled) => {
+    if (!uncalled) return;
+    const player = find(uncalled.position);
+    if (player) player.stack += uncalled.amount;
+  };
+
+  state.streets.forEach((street, index) => {
+    if (index > 0) {
+      // Take the pot straight from the engine rather than re-adding the bets:
+      // potStart is already net of anything handed back on the street before.
+      collected = street.potStart;
       for (const player of players) { player.bet = 0; player.action = null; }
+      giveBack(state.streets[index - 1].uncalled);
       snapshot(street.id, street.board, `${STREET_LABEL[street.id]}`);
     }
     for (const action of street.actions) {
@@ -82,7 +93,7 @@ export function buildFrames(hand, state) {
       player.action = bubbleText(action, hand);
       snapshot(street.id, street.board, `${player.name} — ${player.action}`, action.position);
     }
-  }
+  });
 
   // Final frame: turn everyone's cards over and say who took it.
   const finalBoard = (state.board || []).slice(0, BOARD_LENGTH[state.street] || 5);
@@ -90,14 +101,18 @@ export function buildFrames(hand, state) {
     const player = find(entry.position);
     if (player && entry.cards.length) player.cards = entry.cards.map(cardStr);
   }
-  collected += players.reduce((sum, p) => sum + p.bet, 0);
+  const lastStreet = state.streets[state.streets.length - 1];
+  if (lastStreet) { collected = lastStreet.potEnd; giveBack(lastStreet.uncalled); }
   for (const player of players) { player.bet = 0; player.action = null; }
+  const returned = (state.returns || []).map(
+    (entry) => `Uncalled ${money(entry.amount, hand, 'bb')} returned to ${entry.name}`,
+  );
   const winners = (state.winners || []).map((w) => {
     const player = find(w.position);
     if (player) player.action = `Wins ${money(w.amount, hand, 'bb')}`;
     return `${player ? player.name : w.position} wins ${money(w.amount, hand, 'bb')}`;
   });
-  snapshot(state.street, finalBoard, winners.join(' · ') || 'Hand complete');
+  snapshot(state.street, finalBoard, [...returned, ...winners].join(' · ') || 'Hand complete');
 
   return {
     frames,

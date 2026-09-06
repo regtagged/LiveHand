@@ -18,6 +18,7 @@
 import { evaluate } from './evaluate.js';
 import { actionOrder } from './positions.js';
 import { roundForUnit, toUnits } from './amount.js';
+import { anteAmount } from './hand.js';
 
 export const STREETS = ['preflop', 'flop', 'turn', 'river'];
 export const STREET_LABEL = { preflop: 'Preflop', flop: 'Flop', turn: 'Turn', river: 'River' };
@@ -39,7 +40,8 @@ function initRuntime(hand) {
       cards: p.cards || [],
       startingStack: p.stack,
       stack: p.stack,
-      contributed: 0,   // everything put in this hand, antes included — drives side pots
+      contributed: 0,   // everything out of the stack this hand, antes included
+      wagered: 0,       // contributions other than antes — drives side pots
       streetCommit: 0,  // this street only — drives what's owed
       folded: false,
       allIn: false,
@@ -49,11 +51,19 @@ function initRuntime(hand) {
   return runtime;
 }
 
-/** Move chips from a player's stack toward the pot, capped at what they hold. */
-function commit(player, amount) {
+/**
+ * Move chips from a player's stack toward the pot, capped at what they hold.
+ *
+ * `dead` marks an ante. Antes belong to the pot but are not a wager by the
+ * player who posted them, so they are kept out of `wagered`: a big blind who
+ * antes 1 and then matches a 24 shove has wagered 24, exactly what the shover
+ * wagered, and no side pot should exist between them.
+ */
+function commit(player, amount, dead = false) {
   const paid = Math.min(amount, player.stack);
   player.stack -= paid;
   player.contributed += paid;
+  if (!dead) player.wagered += paid;
   if (player.stack === 0) player.allIn = true;
   return paid;
 }
@@ -68,16 +78,17 @@ function postBlinds(hand, runtime) {
   const order = actionOrder(hand.players.map((p) => p.position), 'preflop', hand.tableSize, hand.scheme);
   let deadPot = 0;
 
-  if (hand.anteMode === 'each' && hand.ante > 0) {
+  const ante = anteAmount(hand);
+  if (hand.anteMode === 'each' && ante > 0) {
     for (const position of order) {
       const player = runtime.get(position);
-      const paid = commit(player, hand.ante);
+      const paid = commit(player, ante, true);
       if (paid > 0) { deadPot += paid; posts.push({ position, kind: 'ante', amount: paid }); }
     }
-  } else if (hand.anteMode === 'bb' && hand.ante > 0) {
+  } else if (hand.anteMode === 'bb' && ante > 0) {
     const player = runtime.get('BB');
     if (player) {
-      const paid = commit(player, hand.ante);
+      const paid = commit(player, ante, true);
       if (paid > 0) { deadPot += paid; posts.push({ position: 'BB', kind: 'ante', amount: paid }); }
     }
   }
@@ -113,6 +124,37 @@ function actingCount(runtime) {
   let n = 0;
   for (const p of runtime.values()) if (!p.folded && !p.allIn) n++;
   return n;
+}
+
+/**
+ * Hand back the part of the largest bet on this street that nobody matched.
+ *
+ * A player who shoves 21 into an opponent who can only call 20 never had that
+ * last chip in play, so it must come out before the street is swept into the
+ * pot — otherwise it is awarded at showdown, and the loser of the hand appears
+ * to "win" their own uncalled chip. Every real hand history reports this as
+ * "Uncalled bet (1) returned to ..." and leaves it out of the total pot.
+ *
+ * Folded players count here: if a raise goes uncalled because everyone passed,
+ * the raiser gets back everything above the largest bet anyone else made.
+ */
+function returnUncalledBet(runtime) {
+  const committed = [...runtime.values()].filter((p) => p.streetCommit > 0);
+  if (!committed.length) return null;
+
+  const sorted = committed.slice().sort((a, b) => b.streetCommit - a.streetCommit);
+  const top = sorted[0];
+  const matched = sorted.length > 1 ? sorted[1].streetCommit : 0;
+  const uncalled = top.streetCommit - matched;
+  if (uncalled <= 0) return null;
+
+  top.streetCommit -= uncalled;
+  top.contributed -= uncalled;
+  top.wagered -= uncalled;
+  top.stack += uncalled;
+  // Chips coming back mean the player is no longer all-in.
+  if (top.stack > 0) top.allIn = false;
+  return { position: top.position, name: top.name, amount: uncalled };
 }
 
 /**
@@ -174,6 +216,7 @@ export function replay(hand) {
   const streetTotal = () => [...runtime.values()].reduce((sum, p) => sum + p.streetCommit, 0);
 
   let collected = deadPot;           // chips gathered from streets already finished
+  const returns = [];                // uncalled bets handed back, newest last
   const queue = (hand.actions || []).slice();
   const streets = [];
   let toAct = null;
@@ -293,8 +336,12 @@ export function replay(hand) {
       break;
     }
 
+    const uncalled = returnUncalledBet(runtime);
+    if (uncalled) { uncalled.street = streetId; returns.push(uncalled); }
+
     for (const player of runtime.values()) { collected += player.streetCommit; player.streetCommit = 0; }
     street.potEnd = collected;
+    street.uncalled = uncalled || null;
     street.complete = true;
     if (liveCount(runtime) <= 1) break;
   }
@@ -311,6 +358,7 @@ export function replay(hand) {
     players,
     posts,
     streets,
+    returns,
     pot: collected + streetTotal(),
     collected,
     street: currentStreet,
@@ -364,19 +412,27 @@ export function settle(hand, players, pot, status) {
     return { pots: [], winners: [], showdown, settled: false, needsWinner: true };
   }
 
-  const levels = [...new Set(players.map((p) => p.contributed))].filter((v) => v > 0).sort((a, b) => a - b);
+  // Side pots are built from wagers only. Antes are dead money that everyone
+  // still in the hand is playing for, so they belong in the main pot.
+  const levels = [...new Set(players.map((p) => p.wagered))].filter((v) => v > 0).sort((a, b) => a - b);
   const pots = [];
   let previous = 0;
   for (const level of levels) {
     let amount = 0;
-    for (const p of players) amount += Math.max(0, Math.min(p.contributed, level) - Math.min(p.contributed, previous));
-    const eligible = live.filter((p) => p.contributed >= level).map((p) => p.position);
+    for (const p of players) amount += Math.max(0, Math.min(p.wagered, level) - Math.min(p.wagered, previous));
+    const eligible = live.filter((p) => p.wagered >= level).map((p) => p.position);
     if (amount > 0 && eligible.length) {
       const last = pots[pots.length - 1];
       if (last && last.eligible.join() === eligible.join()) last.amount += amount;
       else pots.push({ amount, eligible });
     }
     previous = level;
+  }
+
+  const dead = players.reduce((sum, p) => sum + (p.contributed - p.wagered), 0);
+  if (dead > 0) {
+    if (pots.length) pots[0].amount += dead;
+    else pots.push({ amount: dead, eligible: live.map((p) => p.position) });
   }
 
   const won = new Map();

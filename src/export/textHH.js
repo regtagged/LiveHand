@@ -82,6 +82,9 @@ export function toTextHH(hand, state) {
       out.push(`*** ${STREET_HEADER[streetId]} *** ${boardSoFar(state.board, streetId)}`);
     }
     for (const action of street.actions) out.push(pokerStarsLine(action, hand));
+    if (street.uncalled) {
+      out.push(`Uncalled bet (${money(street.uncalled.amount)}) returned to ${street.uncalled.name}`);
+    }
   }
 
   const shown = (state.showdown || []).filter((s) => s.cards && s.cards.length === 2);

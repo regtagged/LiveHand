@@ -106,7 +106,11 @@ test('everyone folding to the big blind ends the hand there', () => {
   assert.equal(state.status, 'complete');
   assert.equal(state.uncontested, true);
   assert.equal(state.winners[0].position, 'BB');
-  assert.equal(bbOf(state.winners[0].amount), 1.5);
+  // The big blind's own unmatched half-blind is handed back, not won: the pot
+  // is the 0.5 the small blind actually put up, plus the 0.5 that matched it.
+  assert.deepEqual(state.returns.map((r) => [r.position, bbOf(r.amount)]), [['BB', 0.5]]);
+  assert.equal(bbOf(state.pot), 1);
+  assert.equal(bbOf(state.winners[0].amount), 1);
 });
 
 test('the big blind gets an option when the pot is only limped', () => {
@@ -165,12 +169,58 @@ test('side pots: a short all-in can only win what it covered', () => {
     ],
   }));
   assert.equal(state.status, 'showdown');
-  assert.equal(state.pots.length, 3, 'main pot, BTN side pot, and the SB overbet coming back');
-  assert.equal(bbOf(state.pots[0].amount), 30);  // 10 x 3
-  assert.equal(bbOf(state.pots[1].amount), 100); // 50 x 2 between SB and BTN
-  assert.equal(bbOf(state.pots[2].amount), 40);  // uncalled remainder returns to SB
+  // The 40 the SB shoved beyond what the button could call was never contested,
+  // so it comes straight back and never becomes a pot at all.
+  assert.deepEqual(state.returns.map((r) => [r.position, bbOf(r.amount)]), [['SB', 40]]);
+  assert.equal(state.pots.length, 2, 'a main pot and one side pot');
+  assert.equal(bbOf(state.pots[0].amount), 30);  // 10 x 3, everyone can win this
+  assert.equal(bbOf(state.pots[1].amount), 100); // 50 x 2, only SB and BTN covered it
   assert.deepEqual(state.winners.map((w) => w.position), ['SB']);
-  assert.equal(bbOf(state.winners[0].amount), 170);
+  assert.equal(bbOf(state.winners[0].amount), 130);
+});
+
+test('the loser of a hand never "wins" their own uncalled chips', () => {
+  // The big blind shoves 21 into a button who can only call 20. The button
+  // wins the hand; the odd big blind was never in play and must come back
+  // rather than being awarded as a one-blind win to the player who lost.
+  const state = replay(buildHand({
+    tableSize: 6, scheme: 'standard', unit: 'bb', sb: 0.5, bb: 1,
+    seats: {
+      SB: 50, BB: { stack: 21, cards: '7c2d' }, LJ: 50, HJ: 50, CO: 50,
+      BTN: { stack: 20, cards: 'AcAd' },
+    },
+    hero: 'BTN', board: 'Ah2h7cTs9s',
+    actions: [fold('LJ'), fold('HJ'), fold('CO'), raise('BTN', 3), fold('SB'), raise('BB', 21), call('BTN', 99)],
+  }));
+
+  assert.deepEqual(state.returns.map((r) => [r.position, bbOf(r.amount)]), [['BB', 1]]);
+  assert.deepEqual(state.winners.map((w) => [w.position, bbOf(w.amount)]), [['BTN', 40.5]]);
+  assert.ok(!state.winners.some((w) => w.position === 'BB'), 'the loser is not listed as a winner');
+  assert.equal(bbOf(state.pot), 40.5, 'the uncalled blind is not part of the pot');
+  const bb = state.players.find((p) => p.position === 'BB');
+  assert.equal(bbOf(bb.stack), 1, 'the chip is back in the loser\'s stack');
+  assert.equal(bb.allIn, false, 'and they are no longer all-in');
+});
+
+test('a big blind ante does not invent a side pot for the player who posted it', () => {
+  // The BB antes 1 and then calls a shove with everything left. Their ante
+  // makes their *total* outlay larger than the shover's, but not their wager —
+  // treating it as one would hand them a phantom top pot they alone qualify
+  // for, so the loser of the hand appears to win a big blind.
+  const state = replay(buildHand({
+    tableSize: 8, scheme: 'standard', unit: 'bb', sb: 0.5, bb: 1, ante: 1, anteMode: 'bb',
+    seats: { SB: 20, BB: { stack: 25, cards: 'KcKd' }, CO: 40, BTN: { stack: 32, cards: 'AcAd' } },
+    hero: 'BTN', board: '2c7d9hTs3s',
+    actions: [fold('CO'), raise('BTN', 32), fold('SB'), call('BB', 99)],
+  }));
+
+  assert.equal(state.status, 'showdown');
+  assert.deepEqual(state.returns.map((r) => [r.position, bbOf(r.amount)]), [['BTN', 8]]);
+  assert.equal(state.pots.length, 1, 'one pot: nobody out-wagered anybody');
+  assert.deepEqual(state.winners.map((w) => [w.position, bbOf(w.amount)]), [['BTN', 49.5]]);
+  assert.ok(!state.winners.some((w) => w.position === 'BB'));
+  // The ante is still in the pot, just not as a wager that splits it.
+  assert.equal(bbOf(state.pot), 49.5);
 });
 
 test('a winner can be named when villain cards were never seen', () => {

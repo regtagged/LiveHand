@@ -142,10 +142,13 @@ test('a hand that ends before showdown still exports', () => {
   const state = replay(hand);
   assert.equal(state.status, 'complete');
   const text = toTextHH(hand, state);
-  assert.match(text, /^BTN collected 4\.5 from pot$/m);
+  // The raise nobody called comes back before the pot is awarded.
+  assert.match(text, /^Uncalled bet \(2\) returned to BTN$/m);
+  assert.match(text, /^BTN collected 2\.5 from pot$/m);
+  assert.match(text, /^Total pot 2\.5 \| Rake 0$/m);
   assert.ok(!text.includes('*** FLOP ***'));
   const { frames } = buildFrames(hand, state);
-  assert.equal(frames.at(-1).caption, 'BTN wins 4.5 BB');
+  assert.equal(frames.at(-1).caption, 'Uncalled 2 BB returned to BTN · BTN wins 2.5 BB');
   assert.ok(sceneToSvg(buildGgSheet(hand, state)).length > 500);
   assert.ok(sceneToSvg(buildTableSheet(hand, state)).length > 500);
 });

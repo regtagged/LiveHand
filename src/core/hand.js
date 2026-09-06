@@ -23,8 +23,21 @@ export function newHandId() {
 /**
  * @returns a blank hand at the given table size with every seat included.
  */
+/**
+ * What the ante actually costs a player.
+ *
+ * A big blind ante is one big blind by definition, so it tracks the blind
+ * rather than being typed separately — there is nothing to get wrong and
+ * nothing to keep in sync when the level goes up.
+ */
+export function anteAmount(hand) {
+  if (hand.anteMode === 'bb') return hand.bb;
+  if (hand.anteMode === 'each') return hand.ante;
+  return 0;
+}
+
 export function createHand(overrides = {}) {
-  const tableSize = overrides.tableSize || 6;
+  const tableSize = overrides.tableSize || 8;
   const scheme = overrides.scheme || 'standard';
   const unit = overrides.unit || 'bb';
   const ring = seatRing(tableSize, scheme);
@@ -41,13 +54,10 @@ export function createHand(overrides = {}) {
     anteMode: 'none',
     tableSize,
     scheme,
-    players: ring.map((position) => ({
-      position,
-      name: position,
-      stack: 0,
-      isHero: position === 'BTN',
-      cards: [],
-    })),
+    // Only the blinds to begin with. Most shared hands name three or four
+    // seats, so starting from an empty table and switching seats on is less
+    // work than clearing out six you never meant to list.
+    players: ring.filter((position) => REQUIRED_POSITIONS.includes(position)).map(blankPlayer),
     straddles: [],
     board: [],
     actions: [],
@@ -57,17 +67,20 @@ export function createHand(overrides = {}) {
   return { ...hand, ...overrides, players: overrides.players || hand.players };
 }
 
-/** Reshape a hand for a new table size / naming scheme, keeping what still fits. */
+function blankPlayer(position) {
+  return { position, name: position, stack: 0, isHero: false, cards: [] };
+}
+
+/**
+ * Reshape a hand for a new table size, keeping the seats already chosen that
+ * still exist at the new size. Seats that were never switched on stay off.
+ */
 export function resizeTable(hand, tableSize, scheme = hand.scheme) {
   const ring = seatRing(tableSize, scheme);
   const previous = new Map(hand.players.map((p) => [p.position, p]));
-  const players = ring.map((position) => previous.get(position) || {
-    position, name: position, stack: 0, isHero: false, cards: [],
-  });
-  if (!players.some((p) => p.isHero)) {
-    const btn = players.find((p) => p.position === 'BTN') || players[players.length - 1];
-    btn.isHero = true;
-  }
+  const players = ring
+    .filter((position) => previous.has(position) || REQUIRED_POSITIONS.includes(position))
+    .map((position) => previous.get(position) || blankPlayer(position));
   return { ...hand, tableSize, scheme, players, actions: [], winners: [] };
 }
 
@@ -76,15 +89,11 @@ export function togglePlayer(hand, position, included) {
   if (REQUIRED_POSITIONS.includes(position) && !included) return hand;
   const ring = seatRing(hand.tableSize, hand.scheme);
   const current = new Map(hand.players.map((p) => [p.position, p]));
-  if (included) {
-    current.set(position, current.get(position) || {
-      position, name: position, stack: 0, isHero: false, cards: [],
-    });
-  } else {
-    current.delete(position);
-  }
+  if (included) current.set(position, current.get(position) || blankPlayer(position));
+  else current.delete(position);
+  // No seat is ever made the hero automatically — guessing puts "you" on a
+  // random seat, and validateSetup asks for it explicitly instead.
   const players = ring.filter((p) => current.has(p)).map((p) => current.get(p));
-  if (!players.some((p) => p.isHero) && players.length) players[players.length - 1].isHero = true;
   return { ...hand, players, actions: [], winners: [] };
 }
 
@@ -116,7 +125,7 @@ export function validateSetup(hand) {
   if (!hand.bb || hand.bb <= 0) problems.push('Enter a big blind.');
   if (hand.sb < 0) problems.push('Small blind cannot be negative.');
   if (hand.sb > hand.bb) problems.push('Small blind is larger than the big blind.');
-  if (hand.anteMode !== 'none' && !hand.ante) problems.push('Enter an ante, or set the ante to none.');
+  if (hand.anteMode === 'each' && !hand.ante) problems.push('Enter an ante, or set the ante to none.');
   if (hand.players.length < 2) problems.push('A hand needs at least two players.');
   for (const required of REQUIRED_POSITIONS) {
     if (!hand.players.some((p) => p.position === required)) problems.push(`${required} must be in the hand.`);

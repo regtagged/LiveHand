@@ -8,11 +8,11 @@
  */
 
 import { parseAmount, fmtAmount, toUnits, fromUnits, toBb } from './src/core/amount.js';
-import { RANKS, SUITS, SUIT_GLYPH, cardStr, parseCards, sameCard } from './src/core/cards.js';
+import { RANKS, SUITS, SUIT_GLYPH, SUIT_NAME, cardStr, sameCard } from './src/core/cards.js';
 import { replay, sizeToTotal, withAction, withoutLastAction, STREET_LABEL, BOARD_LENGTH } from './src/core/engine.js';
 import {
   createHand, resizeTable, togglePlayer, setHero, updatePlayer, validateSetup,
-  usedCards, reviveHand, nextHand,
+  usedCards, reviveHand, nextHand, anteAmount,
 } from './src/core/hand.js';
 import { money, stakesLabel } from './src/core/narrate.js';
 import { seatRing } from './src/core/positions.js';
@@ -28,7 +28,7 @@ const view = document.getElementById('view');
 const sheet = document.getElementById('sheet');
 
 const app = {
-  hand: reviveHand(store.loadDraft()) || createHand({ tableSize: 6 }),
+  hand: reviveHand(store.loadDraft()) || createHand(),
   step: 0,
   ui: { sizeMode: 'pct', sizeValue: '', exportTab: 'text', showNames: false, picker: null },
 };
@@ -78,12 +78,15 @@ function cardSlots(cards, count, action, extra = '') {
 }
 
 /**
- * The card picker. `onPick` receives one card at a time; the sheet stays open
- * until `count` cards have been chosen, so entering a flop is three taps and
- * a suit change rather than three trips through a dialog.
+ * The card picker: the whole deck, four rows of thirteen, coloured the way a
+ * four-colour deck is. Picking a suit first was a mode to be in and a tap to
+ * spend; every card is now one tap, which matters when the flop needs three.
+ *
+ * `onPick` receives all the cards at once, so the sheet stays open until
+ * `count` of them have been chosen.
  */
 function openPicker({ title, count, taken, onPick }) {
-  app.ui.picker = { title, count, taken, onPick, suit: 's', chosen: [] };
+  app.ui.picker = { title, count, taken, onPick, chosen: [] };
   renderPicker();
 }
 
@@ -93,25 +96,22 @@ function renderPicker() {
   const blocked = [...picker.taken, ...picker.chosen];
   document.getElementById('sheet-title').textContent =
     picker.count > 1 ? `${picker.title} (${picker.chosen.length}/${picker.count})` : picker.title;
+
+  const ranks = RANKS.slice().reverse();
   document.getElementById('sheet-body').innerHTML = `
-    <div class="picker-suits">
-      ${SUITS.map((suit) => `<button data-act="pick-suit" data-suit="${suit}"
-        aria-pressed="${picker.suit === suit}" class="suit-${suit}"
-        style="color:${suitColor(suit)}">${SUIT_GLYPH[suit]}</button>`).join('')}
+    <div class="deck">
+      ${SUITS.map((suit) => ranks.map((rank) => {
+        const used = blocked.some((c) => sameCard(c, { rank, suit }));
+        return `<button class="deck-card suit-bg-${suit}" data-act="pick-card"
+          data-rank="${rank}" data-suit="${suit}" ${used ? 'disabled' : ''}
+          aria-label="${rank} of ${SUIT_NAME[suit]}"><b>${rank}</b><i>${SUIT_GLYPH[suit]}</i></button>`;
+      }).join('')).join('')}
     </div>
-    <div class="picker-ranks">
-      ${RANKS.slice().reverse().map((rank) => {
-        const card = { rank, suit: picker.suit };
-        const used = blocked.some((c) => sameCard(c, card));
-        return `<button data-act="pick-rank" data-rank="${rank}" ${used ? 'disabled' : ''}
-          style="color:${suitColor(picker.suit)}">${rank}</button>`;
-      }).join('')}
-    </div>
-    ${picker.chosen.length ? `<p class="hint">Picked ${picker.chosen.map(cardStr).join(' ')}</p>` : ''}`;
+    ${picker.chosen.length
+      ? `<p class="hint">Picked ${picker.chosen.map(cardStr).join(' ')}</p>`
+      : ''}`;
   sheet.hidden = false;
 }
-
-const suitColor = (suit) => ({ s: '#e4e4e7', h: '#f87171', d: '#60a5fa', c: '#4ade80' }[suit]);
 
 function closeSheet() {
   app.ui.picker = null;
@@ -127,7 +127,7 @@ function renderSession() {
   <div class="card">
     <h2>Session</h2>
     <div class="field">
-      <label for="tournament">Tournament or game</label>
+      <label for="tournament">Tournament or game <span class="opt">optional</span></label>
       <input id="tournament" type="text" data-field="tournament" list="recent-sessions"
              value="${esc(hand.tournament)}" placeholder="e.g. Bounty Hunters HR" autocomplete="off">
       <datalist id="recent-sessions">
@@ -170,10 +170,12 @@ function renderSession() {
         <button data-act="ante-mode" data-value="bb" aria-pressed="${hand.anteMode === 'bb'}">Big blind ante</button>
       </div>
     </div>
-    ${hand.anteMode !== 'none' ? `<div class="field">
+    ${hand.anteMode === 'each' ? `<div class="field">
       <label for="ante">Ante size (${unitLabel()})</label>
       <input id="ante" type="text" inputmode="decimal" data-field="ante" value="${amountValue(hand.ante)}">
     </div>` : ''}
+    ${hand.anteMode === 'bb' ? `<p class="hint">A big blind ante is one big blind
+      — ${esc(showAmount(anteAmount(hand)))} — posted by the big blind, so there is nothing to enter.</p>` : ''}
   </div>
 
   <button class="primary" data-act="goto" data-step="1">Next: the table</button>`;
@@ -198,25 +200,18 @@ function renderTable() {
   return `
   <div class="card">
     <h2>Table</h2>
-    <div class="row">
-      <div class="field"><label for="seats">Seats at the table</label>
-        <select id="seats" data-field="tableSize">
-          ${Array.from({ length: 9 }, (_, i) => i + 2).map((n) => `<option value="${n}"
-            ${n === hand.tableSize ? 'selected' : ''}>${n}-max</option>`).join('')}
-        </select></div>
-      <div class="field"><label>Position names</label>
-        <div class="segment">
-          <button data-act="scheme" data-value="standard" aria-pressed="${hand.scheme === 'standard'}">LJ/HJ</button>
-          <button data-act="scheme" data-value="gg" aria-pressed="${hand.scheme === 'gg'}">MP/MP1</button>
-        </div></div>
-    </div>
+    <div class="field"><label for="seats">Seats at the table</label>
+      <select id="seats" data-field="tableSize">
+        ${Array.from({ length: 9 }, (_, i) => i + 2).map((n) => `<option value="${n}"
+          ${n === hand.tableSize ? 'selected' : ''}>${n}-max</option>`).join('')}
+      </select></div>
   </div>
 
   <div class="card">
     <h2>Seats and stacks <button class="ghost" data-act="toggle-names" style="float:right;margin-top:-4px">
       ${app.ui.showNames ? 'Hide names' : 'Names'}</button></h2>
-    <p class="hint" style="margin:0 0 10px">Stacks in ${unitLabel()}, as they were at the start of the hand.
-      Switch off any seat you don't want to list — the blinds have to stay.</p>
+    <p class="hint" style="margin:0 0 10px">Switch on the seats that were in the hand and enter their
+      stacks in ${unitLabel()}, as they were when it started. The blinds are always in.</p>
     <div class="seatgrid">
       ${ring.map((position) => {
         const player = hand.players.find((p) => p.position === position);
@@ -469,8 +464,8 @@ function renderFinishBar(state) {
 
 const EXPORT_TABS = [
   ['text', 'Text'],
-  ['gg', 'GG image'],
-  ['table', 'Table image'],
+  ['gg', 'HH View'],
+  ['table', 'Table View'],
   ['replayer', 'Replayer'],
 ];
 
@@ -625,7 +620,6 @@ document.addEventListener('click', (event) => {
 
     case 'unit': changeUnit(target.dataset.value); break;
     case 'ante-mode': setHand({ ...app.hand, anteMode: target.dataset.value }); break;
-    case 'scheme': setHand(resizeTable(app.hand, app.hand.tableSize, target.dataset.value)); break;
     case 'load-session': loadSession(Number(target.dataset.index)); break;
 
     case 'toggle-names': app.ui.showNames = !app.ui.showNames; render(); break;
@@ -639,8 +633,7 @@ document.addEventListener('click', (event) => {
     case 'pick-hero': pickHoleCards(app.hand.players.find((p) => p.isHero).position, Number(target.dataset.index)); break;
     case 'set-cards': pickHoleCards(target.dataset.pos, 0); break;
 
-    case 'pick-suit': app.ui.picker.suit = target.dataset.suit; renderPicker(); break;
-    case 'pick-rank': choosePickerRank(target.dataset.rank); break;
+    case 'pick-card': choosePickerCard(target.dataset.rank, target.dataset.suit); break;
 
     case 'deal': dealBoard(target.dataset.street); break;
     case 'edit-board': editBoardCard(Number(target.dataset.index)); break;
@@ -776,9 +769,9 @@ function editBoardCard(index) {
   });
 }
 
-function choosePickerRank(rank) {
+function choosePickerCard(rank, suit) {
   const picker = app.ui.picker;
-  picker.chosen.push({ rank, suit: picker.suit });
+  picker.chosen.push({ rank, suit });
   if (picker.chosen.length >= picker.count) {
     const chosen = picker.chosen;
     const onPick = picker.onPick;

@@ -67,6 +67,7 @@ main { max-width: 680px; margin: 0 auto; padding: 12px 14px 24px; }
 .card > h2 { font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; }
 
 label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+.opt { font-size: 11px; color: #6c6c78; font-style: italic; }
 .field { margin-bottom: 12px; }
 .field:last-child { margin-bottom: 0; }
 .row { display: flex; gap: 10px; }
@@ -147,18 +148,26 @@ button.ghost.back { font-size: 20px; line-height: 1; padding: 4px 12px; }
 .cardslots { display: flex; gap: 6px; align-items: center; }
 .cardslots button { background: none; border: 0; padding: 0; cursor: pointer; }
 
-.picker-suits { display: flex; gap: 6px; margin-bottom: 10px; }
-.picker-suits button {
-  flex: 1; padding: 10px; font-size: 20px; border-radius: 10px; cursor: pointer;
-  background: var(--panel-2); border: 1px solid var(--line);
+/* The whole deck at once: four suit rows of thirteen, coloured as a four-colour
+   deck, so any card is a single tap. Thirteen columns is tight on a phone, so
+   the rank scales with the cell and the suit sits behind it as a watermark. */
+.deck { display: grid; grid-template-columns: repeat(13, 1fr); gap: 3px; }
+.deck-card {
+  position: relative; display: grid; place-items: center; overflow: hidden;
+  aspect-ratio: 3 / 4; padding: 0; border: 0; border-radius: 4px; cursor: pointer;
+  color: #fff; font-family: inherit;
 }
-.picker-suits button[aria-pressed='true'] { border-color: var(--accent); background: #22322a; }
-.picker-ranks { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
-.picker-ranks button {
-  padding: 12px 0; font-size: 16px; font-weight: 700; border-radius: 9px; cursor: pointer;
-  background: var(--panel-2); border: 1px solid var(--line); color: var(--ink);
+.deck-card b { position: relative; z-index: 1; font-size: clamp(11px, 3.4vw, 18px); font-weight: 800; }
+.deck-card i {
+  position: absolute; right: -12%; bottom: -22%; z-index: 0;
+  font-size: clamp(20px, 6vw, 32px); font-style: normal; opacity: .3; line-height: 1;
 }
-.picker-ranks button:disabled { opacity: .28; cursor: default; }
+.deck-card:disabled { opacity: .18; cursor: default; }
+.deck-card:not(:disabled):active { transform: scale(.92); }
+.deck .suit-bg-s { background: #4b4b55; }
+.deck .suit-bg-h { background: #a01f1f; }
+.deck .suit-bg-d { background: #1f35c4; }
+.deck .suit-bg-c { background: #2f8f45; }
 
 /* ---- action step ---- */
 

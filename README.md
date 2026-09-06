@@ -5,8 +5,8 @@ three formats people actually share:
 
 1. **Text hand history** — PokerStars-family plain text, the format trackers,
    solvers and forums already read.
-2. **Image** — either the GG-style share sheet (stacks, then one line of action
-   per street) or the client-style table (felt on top, action columns below).
+2. **Image** — either **HH View** (the share-sheet layout: stacks, then one line
+   of action per street) or **Table View** (felt on top, action columns below).
    You pick at export time.
 3. **Replayer** — one self-contained HTML file that steps through the hand.
 
@@ -34,15 +34,19 @@ npm test    # 35 tests, Node's built-in runner
 
 ## The flow
 
-**1 · Session.** Tournament name — with a dropdown of recent ones, since the
-blinds and table size usually repeat — then whether you're typing *chips* or
-*big blinds*, the blinds themselves, and the ante (none, every player, or a
-big blind ante).
+**1 · Session.** Tournament name if you want one — it's optional, and there's a
+dropdown of recent ones since the blinds and table size usually repeat — then
+whether you're typing *chips* or *big blinds*, the blinds themselves, and the
+ante. A big blind ante needs no size: it is one big blind by definition, so it
+follows the blind rather than being typed and going stale at the next level.
 
-**2 · Table.** Pick the number of seats, then switch off any seat you don't
-want to list. Most shared hands only name three or four players, so the seat
-list is meant to be trimmed; the blinds always stay because they always post.
-Enter the stacks, tap **YOU** on your seat, and pick your two cards.
+**2 · Table.** Eight seats by default, all switched off except the blinds.
+Switch on the ones that were in the hand — most shared hands name three or four
+players — enter their stacks, tap **YOU** on your seat, and pick your two cards.
+Nothing is ever made hero for you.
+
+Cards are picked from the whole deck at once: four rows of thirteen in
+four-colour, so any card is a single tap and a flop is three.
 
 **3 · Action.** A strip of seats across the top showing everyone's stack, their
 wager and what they last did, with whoever is to act highlighted. Underneath,
@@ -64,8 +68,20 @@ share button uses the native share sheet on phones that have one.
 Stacks are tracked street by street and **nothing can ever put in more than a
 player has** — a shove is capped at the stack, a call is capped at the amount
 actually owed, and if you type a size larger than the stack the bar tells you
-it's capping before you commit it. Side pots are built by contribution level,
-so a short all-in only wins the part of the pot it covered.
+it's capping before you commit it. Side pots are built by wager level, so a
+short all-in only wins the part of the pot it covered.
+
+Two things a naive pot model gets wrong, both of which make the *loser* of a
+hand appear to win a blind or two, and both of which are covered by tests:
+
+- **An uncalled bet is not a win.** Shove 21 into someone who can only call 20
+  and that last chip was never in play. It is handed back before the pot is
+  awarded — `Uncalled bet (1) returned to …` — rather than being counted into
+  the pot and paid out at showdown.
+- **An ante is not a wager.** It is dead money everyone still in the hand plays
+  for, so it goes to the main pot and never sets a side-pot level. Otherwise a
+  big blind who antes and then calls a shove has a larger *total* outlay than
+  the shover and collects a phantom pot of their own ante.
 
 Min-raise sizes are offered but not enforced. This is a tool for transcribing a
 hand that already happened, and hands sometimes happen strangely; the app
@@ -128,6 +144,9 @@ root or from a project subpath.
   Omaha would need four hole cards through the evaluator and equity code.
 - **No straddle UI.** `hand.straddles` is honoured by the engine and the text
   export, but nothing on the setup screen sets it yet.
+- **Positions are always LJ/HJ.** The core still knows GG's MP/MP1 naming
+  (`seatRing(n, 'gg')`) and the tests use it, but the app no longer offers the
+  choice.
 - **Run-it-twice and rake aren't modelled.** Every pot is awarded once, and the
   summary line prints `Rake 0`.
 - **Preflop equity is sampled**, not enumerated — 25,000 run-outs off a fixed

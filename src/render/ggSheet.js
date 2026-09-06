@@ -89,6 +89,13 @@ export function buildGgSheet(hand, state, { width = 760 } = {}) {
 
   y = drawShowdown(scene, hand, state, { x, y, maxWidth });
 
+  for (const entry of state.returns || []) {
+    scene.text(x, y, `Uncalled bet (${money(entry.amount, hand, 'bb')}) returned to ${entry.name}`, {
+      size: SIZE, fill: FOLD,
+    });
+    y += LINE;
+  }
+
   for (const winner of state.winners || []) {
     const player = state.players.find((p) => p.position === winner.position);
     scene.text(x, y, `${player.name} wins ${money(winner.amount, hand, 'bb')}`, {

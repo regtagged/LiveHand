@@ -7,6 +7,7 @@
  */
 
 import { fmtAmount, toBb } from './amount.js';
+import { anteAmount } from './hand.js';
 
 /**
  * Render an amount the way a given export wants it. `bb` forces big blinds
@@ -64,8 +65,9 @@ export function bubbleText(action, hand) {
 /** "2000/4000 Ante 600" — the stakes line shared by every export's title. */
 export function stakesLabel(hand) {
   const parts = [`${fmtAmount(hand.sb, hand.unit)}/${fmtAmount(hand.bb, hand.unit)}`];
-  if (hand.anteMode !== 'none' && hand.ante > 0) {
-    parts.push(`Ante ${fmtAmount(hand.ante, hand.unit)}${hand.anteMode === 'bb' ? ' (BB ante)' : ''}`);
+  const ante = anteAmount(hand);
+  if (ante > 0) {
+    parts.push(`Ante ${fmtAmount(ante, hand.unit)}${hand.anteMode === 'bb' ? ' (BB ante)' : ''}`);
   }
   return parts.join(' ');
 }

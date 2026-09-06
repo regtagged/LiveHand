@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { seatRing, preflopRing, postflopRing, actionOrder } from '../src/core/positions.js';
 import {
   createHand, togglePlayer, resizeTable, setHero, validateSetup, reviveHand, nextHand,
+  anteAmount,
 } from '../src/core/hand.js';
 import { evaluate } from '../src/core/evaluate.js';
 import { equity } from '../src/core/equity.js';
@@ -32,33 +33,74 @@ test('dropping seats keeps the survivors in the right order', () => {
   assert.deepEqual(order, ['CO', 'BTN', 'SB', 'BB']);
 });
 
+test('a new hand starts with the blinds only, and nobody as hero', () => {
+  const hand = createHand();
+  assert.equal(hand.tableSize, 8);
+  assert.deepEqual(hand.players.map((p) => p.position), ['SB', 'BB']);
+  assert.ok(!hand.players.some((p) => p.isHero), 'the hero is chosen, never guessed');
+  assert.ok(validateSetup(hand).some((p) => /Pick which seat is you/.test(p)));
+});
+
 test('the blinds cannot be dropped from a hand', () => {
   let hand = createHand({ tableSize: 6 });
   hand = togglePlayer(hand, 'SB', false);
   assert.ok(hand.players.some((p) => p.position === 'SB'));
+  hand = togglePlayer(hand, 'LJ', true);
+  assert.ok(hand.players.some((p) => p.position === 'LJ'));
   hand = togglePlayer(hand, 'LJ', false);
   assert.ok(!hand.players.some((p) => p.position === 'LJ'));
 });
 
-test('resizing the table keeps the stacks that still have a seat', () => {
+test('switching a seat on never makes it the hero behind your back', () => {
   let hand = createHand({ tableSize: 6 });
+  hand = togglePlayer(hand, 'CO', true);
+  hand = togglePlayer(hand, 'BTN', true);
+  assert.ok(!hand.players.some((p) => p.isHero));
+});
+
+test('resizing the table keeps the seats already chosen, and their stacks', () => {
+  let hand = createHand({ tableSize: 6 });
+  for (const position of ['LJ', 'HJ', 'CO', 'BTN']) hand = togglePlayer(hand, position, true);
   hand = { ...hand, players: hand.players.map((p) => ({ ...p, stack: toUnits(50) })) };
+
   const smaller = resizeTable(hand, 3);
   assert.deepEqual(smaller.players.map((p) => p.position), ['SB', 'BB', 'BTN']);
   assert.ok(smaller.players.every((p) => p.stack === toUnits(50)));
-  assert.ok(smaller.players.some((p) => p.isHero), 'a hero always survives a resize');
+});
+
+test('resizing does not switch seats back on that were left off', () => {
+  let hand = createHand({ tableSize: 6 });
+  hand = togglePlayer(hand, 'BTN', true);
+  const bigger = resizeTable(hand, 9);
+  assert.deepEqual(bigger.players.map((p) => p.position), ['SB', 'BB', 'BTN']);
 });
 
 test('setup problems are reported as sentences, and clear when fixed', () => {
   let hand = createHand({ tableSize: 6 });
   assert.ok(validateSetup(hand).some((p) => /Enter a stack/.test(p)));
+  hand = togglePlayer(hand, 'BTN', true);
   hand = { ...hand, players: hand.players.map((p) => ({ ...p, stack: toUnits(40) })) };
   hand = setHero(hand, 'BTN');
   assert.deepEqual(validateSetup(hand), []);
 });
 
+test('a big blind ante is one big blind, with no size to enter', () => {
+  let hand = createHand({ tableSize: 6 });
+  hand = togglePlayer(hand, 'BTN', true);
+  hand = { ...hand, players: hand.players.map((p) => ({ ...p, stack: toUnits(40) })) };
+  hand = setHero(hand, 'BTN');
+  hand = { ...hand, anteMode: 'bb', ante: 0 };
+
+  assert.equal(anteAmount(hand), hand.bb);
+  assert.deepEqual(validateSetup(hand), [], 'no ante size is asked for');
+  // It follows the blind rather than being stored, so a level change can't
+  // leave a stale ante behind.
+  assert.equal(anteAmount({ ...hand, bb: toUnits(4000) }), toUnits(4000));
+});
+
 test('a stack under one big blind is flagged as a probable unit mix-up', () => {
   let hand = createHand({ tableSize: 6 });
+  hand = togglePlayer(hand, 'CO', true);
   hand = { ...hand, players: hand.players.map((p) => ({ ...p, stack: toUnits(40) })) };
   hand = { ...hand, players: hand.players.map((p) => (p.position === 'CO' ? { ...p, stack: toUnits(0.4) } : p)) };
   assert.ok(validateSetup(hand).some((p) => /less than one big blind/.test(p)));
@@ -98,7 +140,8 @@ test('equity lands on the published numbers for known match-ups', () => {
 
 test('the next hand keeps the table and forgets the hand', () => {
   let hand = createHand({ tableSize: 8, scheme: 'gg' });
-  hand = togglePlayer(hand, 'MP1', false);          // a seat left out on purpose
+  for (const position of ['UTG', 'UTG+1', 'MP', 'CO', 'BTN']) hand = togglePlayer(hand, position, true);
+  // MP1 is deliberately never switched on.
   hand = { ...hand, players: hand.players.map((p) => ({ ...p, stack: toUnits(40), cards: parseCards('AcKc') })) };
   hand = setHero(hand, 'SB');
   hand = {
