@@ -59,15 +59,29 @@ four-colour, so any card is a single tap and a flop is three.
 
 **3 · Action.** A strip of seats across the top showing everyone's stack, their
 wager and what they last did, with whoever is to act highlighted. Underneath,
-the action bar offers only what is legal right now — fold, check or call, and a
-row of sizings. Each sizing button shows both the shorthand and what it comes
-to (`75%` / `14,650`), and you can type a size as a **percentage of the pot, a
-number of big blinds, or a flat amount**. Percentages are of the pot *after*
-calling, which is how solvers and players both mean it.
+the action bar offers only what is legal right now: **Fold**, **Check/Call**,
+and a third verb that reads what it will do — `Raise to 8.75` — and does it in
+one tap. There is no separate confirm.
 
-When a street's betting finishes, the app asks for the board cards before it
-will let the next street start. At the end it works out who won; if you never
-saw a villain's cards, tap who took it instead.
+Sizings are offered in the units the street is actually spoken in. **Preflop
+they are multiples of a blind** — `2.5x 3x 3.5x` to open, `3x 3.5x 4x` of the
+open to three-bet, coming down to `2x 2.2x 2.5x` for a four-bet — because a
+percentage of a 2.5bb pot is a number nobody has ever opened to. **Postflop
+they are percentages of the pot** after calling, which is what solvers and
+players both mean there. Every button shows the shorthand and what it comes to
+(`75%` / `14,650`), and you can always type a size instead; the typed box
+defaults to big blinds preflop and pot percentage after.
+
+When a street's betting closes, the card picker opens on its own — the hand
+cannot go anywhere without those cards, so it does not make you ask.
+
+At the end it works out who won; if you never saw a villain's cards, tap who
+took it instead.
+
+For scale: a full four-street hand — open, three-bet, call, c-bet, call, jam,
+call, showdown — takes **25 interactions**, of which 23 are taps on large
+targets and the only typing is your own stack. The same hand written out as a
+message is around 135 characters of phone keyboard.
 
 **4 · Export.** All three formats, previewed, with copy / download / share. The
 share button uses the native share sheet on phones that have one.

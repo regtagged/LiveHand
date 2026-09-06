@@ -7,7 +7,7 @@
  * the action bar offers exactly what the engine says is legal, and nothing else.
  */
 
-import { parseAmount, fmtAmount, toUnits, fromUnits, toBb } from './src/core/amount.js';
+import { parseAmount, fmtAmount, toUnits, fromUnits, toBb, roundForUnit } from './src/core/amount.js';
 import { RANKS, SUITS, SUIT_GLYPH, SUIT_NAME, cardStr, sameCard } from './src/core/cards.js';
 import { replay, sizeToTotal, withAction, withoutLastAction, STREET_LABEL, BOARD_LENGTH } from './src/core/engine.js';
 import {
@@ -30,7 +30,8 @@ const sheet = document.getElementById('sheet');
 const app = {
   hand: reviveHand(store.loadDraft()) || createHand(),
   step: 0,
-  ui: { sizeMode: 'pct', sizeValue: '', exportTab: 'text', showNames: false, picker: null },
+  // sizeMode null means "whatever suits this street" — see sizeMode().
+  ui: { sizeMode: null, sizeValue: '', exportTab: 'text', showNames: false, picker: null },
 };
 
 const esc = (value) => String(value).replace(/[&<>"']/g, (c) => (
@@ -38,6 +39,13 @@ const esc = (value) => String(value).replace(/[&<>"']/g, (c) => (
 ));
 
 const unitLabel = () => (app.hand.unit === 'bb' ? 'BB' : 'chips');
+
+/**
+ * How a typed size is read. Preflop people say "I opened to 2.5" and mean big
+ * blinds; postflop they say "half pot". Defaulting per street means the common
+ * case needs no mode tap at all, and an explicit choice still sticks.
+ */
+const sizeMode = (state) => app.ui.sizeMode || (state.street === 'preflop' ? 'bb' : 'pct');
 /** Most seats are just called by their position; only say it twice if it isn't. */
 const who = (player) => (player.name === player.position ? player.position : `${player.name} · ${player.position}`);
 const showAmount = (units) => money(units, app.hand, 'native');
@@ -111,6 +119,22 @@ function renderPicker() {
       ? `<p class="hint">Picked ${picker.chosen.map(cardStr).join(' ')}</p>`
       : ''}`;
   sheet.hidden = false;
+}
+
+/**
+ * Open a picker straight after the render that decided it was needed.
+ *
+ * Deferred rather than called inline because the caller is building markup
+ * that has not been put in the document yet, and skipped if a sheet is already
+ * up so a re-render can't reopen one the user just dismissed.
+ */
+function autoOpen(open) {
+  if (autoOpen.pending || !sheet.hidden) return;
+  autoOpen.pending = true;
+  setTimeout(() => {
+    autoOpen.pending = false;
+    if (sheet.hidden) open();
+  }, 0);
 }
 
 function closeSheet() {
@@ -251,11 +275,34 @@ function renderTable() {
     ${hero ? cardSlots(hero.cards, 2, 'pick-hero') : ''}
   </div>
 
-  ${problems.length ? `<div class="problems"><strong>Before you start:</strong>
-    <ul>${problems.map((p) => `<li>${esc(p)}</li>`).join('')}</ul></div>` : ''}
+  <div id="setup-problems">${problemsHtml(problems)}</div>
 
   <button class="primary" data-act="goto" data-step="2" ${problems.length ? 'disabled' : ''}>
     Start the hand</button>`;
+}
+
+function problemsHtml(problems) {
+  if (!problems.length) return '';
+  return `<div class="problems"><strong>Before you start:</strong>
+    <ul>${problems.map((p) => `<li>${esc(p)}</li>`).join('')}</ul></div>`;
+}
+
+/**
+ * Re-check the setup without redrawing the screen.
+ *
+ * Typing deliberately skips a re-render so the caret survives, which used to
+ * mean the last thing you typed — usually your own stack — left "Start the
+ * hand" greyed out until you touched something else.
+ */
+function refreshValidation() {
+  const problems = validateSetup(app.hand);
+  const box = document.getElementById('setup-problems');
+  if (box) box.innerHTML = problemsHtml(problems);
+  const start = document.querySelector('[data-act="goto"][data-step="2"].primary');
+  if (start) start.disabled = problems.length > 0;
+  for (const button of document.querySelectorAll('.steps button')) {
+    if (Number(button.dataset.step) >= 2) button.disabled = problems.length > 0;
+  }
 }
 
 /* -------------------------------------------------------------- step 3: action */
@@ -347,6 +394,9 @@ function renderActionBar(state) {
   if (state.status === 'awaiting-board') {
     const street = state.needsBoardFor;
     const need = BOARD_LENGTH[street] - (app.hand.board || []).length;
+    // The hand cannot go anywhere without these cards and there is nothing else
+    // to do here, so asking for a tap to open the deck is a tap wasted.
+    autoOpen(() => dealBoard(street));
     return `<div class="actionbar">
       <div class="who"><b>${STREET_LABEL[street]}</b><span>pot ${showAmount(state.pot)}</span></div>
       <button class="primary" data-act="deal" data-street="${street}">
@@ -362,6 +412,9 @@ function renderActionBar(state) {
   const player = state.players.find((p) => p.position === state.toAct);
   const callLabel = legal.canCheck ? 'Check' : `Call ${showAmount(legal.toCall)}${legal.callIsAllIn ? ' (all-in)' : ''}`;
   const aggroWord = legal.isRaise ? 'Raise to' : 'Bet';
+  const modes = app.hand.unit === 'bb'
+    ? [['bb', 'BB'], ['pct', '%']]
+    : [['bb', 'BB'], ['pct', '%'], ['amount', 'Chips']];
 
   return `<div class="actionbar">
     <div class="who">
@@ -373,69 +426,104 @@ function renderActionBar(state) {
       <button class="fold" data-act="act" data-kind="fold">Fold</button>
       <button class="${legal.canCheck ? 'check' : ''}" data-act="act"
         data-kind="${legal.canCheck ? 'check' : 'call'}">${callLabel}</button>
+      <button class="aggro" data-act="size-confirm">${aggroLabel(legal, state)}</button>
     </div>
     <div class="sizer">
       <div class="presets">
-        ${presetButtons(legal).join('')}
+        ${presetButtons(legal, state).join('')}
       </div>
       <div class="sizerow">
         <input type="text" inputmode="decimal" id="sizeinput" data-field="size"
                value="${esc(app.ui.sizeValue)}" placeholder="${aggroWord.toLowerCase()}…">
         <div class="segment">
-          <button data-act="size-mode" data-value="pct" aria-pressed="${app.ui.sizeMode === 'pct'}">%</button>
-          <button data-act="size-mode" data-value="bb" aria-pressed="${app.ui.sizeMode === 'bb'}">BB</button>
-          <button data-act="size-mode" data-value="amount"
-            aria-pressed="${app.ui.sizeMode === 'amount'}">${unitLabel() === 'BB' ? 'Total' : 'Chips'}</button>
+          ${modes.map(([value, label]) => `<button data-act="size-mode" data-value="${value}"
+            aria-pressed="${sizeMode(state) === value}">${label}</button>`).join('')}
         </div>
       </div>
-      ${sizeMeta(legal)}
+      ${sizeMeta(legal, state)}
     </div>
   </div>`;
 }
 
 /**
  * Preset sizings, each labelled with the amount it actually works out to.
- * A percentage is of the pot *after* calling, which is how every solver and
- * every player means it.
+ *
+ * Preflop sizes are multiples of a blind, because that is the only way anyone
+ * says them — a percentage of a 2.5bb pot is a number nobody has ever opened
+ * to. Postflop they are percentages of the pot after calling, which is what
+ * every solver and every player means there.
  */
-function presetButtons(legal) {
+function presetButtons(legal, state) {
   const hand = app.hand;
-  const buttons = [];
-  const minLabel = legal.isRaise ? 'Min' : 'Min';
-  buttons.push(`<button data-act="size-apply" data-mode="amount" data-value="${fromUnits(legal.minTo)}">
-    <b>${minLabel}</b><i>${showAmount(legal.minTo)}</i></button>`);
+  const buttons = [`<button data-act="size-apply" data-value="${fromUnits(legal.minTo)}">
+    <b>Min</b><i>${showAmount(legal.minTo)}</i></button>`];
 
-  for (const pct of [33, 50, 75, 100]) {
-    const total = sizeToTotal(legal, 'pct', pct, hand);
+  for (const [label, total] of presetSizes(legal, state, hand)) {
     if (total <= legal.minTo || total >= legal.maxTo) continue;
-    buttons.push(`<button data-act="size-apply" data-mode="amount" data-value="${fromUnits(total)}">
-      <b>${pct}%</b><i>${showAmount(total)}</i></button>`);
+    buttons.push(`<button data-act="size-apply" data-value="${fromUnits(total)}">
+      <b>${label}</b><i>${showAmount(total)}</i></button>`);
   }
 
   if (!legal.unknownStack) {
-    buttons.push(`<button class="allin" data-act="size-apply" data-mode="amount" data-value="${fromUnits(legal.maxTo)}">
+    buttons.push(`<button class="allin" data-act="size-apply" data-value="${fromUnits(legal.maxTo)}">
       <b>All-in</b><i>${showAmount(legal.maxTo)}</i></button>`);
   }
   return buttons;
 }
 
-function sizeMeta(legal) {
+/** @returns {[string, number][]} label and total-for-the-street, in units. */
+function presetSizes(legal, state, hand) {
+  if (state.street !== 'preflop') {
+    return [33, 50, 75, 100].map((pct) => [`${pct}%`, sizeToTotal(legal, 'pct', pct, hand)]);
+  }
+
+  const preflop = state.streets.find((street) => street.id === 'preflop');
+  const raises = preflop ? preflop.actions.filter((a) => a.kind === 'raise').length : 0;
+  // The bet being faced: a blind if nobody has raised, otherwise the last raise.
+  const facing = legal.streetCommit + legal.toCall;
+  const size = (multiple, of) => roundForUnit(Math.round(multiple * of), hand.unit);
+
+  // Opening. Sized off the big blind.
+  if (raises === 0) return [2, 2.5, 3, 3.5].map((m) => [`${m}x`, size(m, hand.bb)]);
+  // Three-betting. Sized off the open.
+  if (raises === 1) return [3, 3.5, 4].map((m) => [`${m}x`, size(m, facing)]);
+  // Four-bet and beyond, where the multiples come right down.
+  return [2, 2.2, 2.5].map((m) => [`${m}x`, size(m, facing)]);
+}
+
+/**
+ * What the aggressive verb would do right now: whatever is typed in the sizing
+ * box, or the minimum if it is empty. Tapping the verb is the confirmation, so
+ * there is no separate one.
+ */
+function pendingTotal(legal, state) {
+  const raw = parseFloat(app.ui.sizeValue);
+  if (!Number.isFinite(raw)) return legal.minTo;
+  const total = sizeToTotal(legal, sizeMode(state), raw, app.hand);
+  return total === null ? legal.minTo : total;
+}
+
+function aggroLabel(legal, state) {
+  return `${legal.isRaise ? 'Raise to' : 'Bet'} ${showAmount(pendingTotal(legal, state))}`;
+}
+
+function sizeMeta(legal, state) {
   const max = legal.unknownStack ? 'no stack entered' : `Max ${showAmount(legal.maxTo)}`;
   const raw = parseFloat(app.ui.sizeValue);
+  const mode = sizeMode(state);
   if (!Number.isFinite(raw)) {
     return `<div class="sizemeta"><span>Min ${showAmount(legal.minTo)}</span><span>${max}</span></div>`;
   }
-  const total = sizeToTotal(legal, app.ui.sizeMode, raw, app.hand);
-  const wanted = app.ui.sizeMode === 'pct'
-    ? total
-    : Math.round(app.ui.sizeMode === 'bb' ? raw * app.hand.bb : toUnits(raw));
+  const wanted = mode === 'pct'
+    ? sizeToTotal(legal, mode, raw, app.hand)
+    : Math.round(mode === 'bb' ? raw * app.hand.bb : toUnits(raw));
   // The engine would cap this anyway; saying so up front is less surprising.
   const capped = !legal.unknownStack && wanted > legal.maxTo;
   return `<div class="sizemeta">
     <span class="${capped ? 'over' : ''}">${capped
       ? `Only ${showAmount(legal.maxTo)} behind — capped`
-      : `${legal.isRaise ? 'Raise to' : 'Bet'} ${showAmount(total)}`}</span>
-    <button class="ghost" data-act="size-confirm">Confirm</button>
+      : `Min ${showAmount(legal.minTo)}`}</span>
+    <span>${max}</span>
   </div>`;
 }
 
@@ -642,7 +730,14 @@ document.addEventListener('click', (event) => {
       setHand(togglePlayer(app.hand, position, !on));
       break;
     }
-    case 'set-hero': setHand(setHero(app.hand, target.dataset.pos)); break;
+    case 'set-hero': {
+      const position = target.dataset.pos;
+      setHand(setHero(app.hand, position));
+      const hero = app.hand.players.find((p) => p.position === position);
+      // Naming your seat and dealing yourself in is one thought, not two.
+      if (hero && !hero.cards.length) autoOpen(() => pickHoleCards(position, 0));
+      break;
+    }
     case 'pick-hero': pickHoleCards(app.hand.players.find((p) => p.isHero).position, Number(target.dataset.index)); break;
     case 'set-cards': pickHoleCards(target.dataset.pos, 0); break;
 
@@ -652,7 +747,7 @@ document.addEventListener('click', (event) => {
     case 'edit-board': editBoardCard(Number(target.dataset.index)); break;
     case 'undo': undo(); break;
     case 'act': applyAction(target.dataset.kind); break;
-    case 'size-apply': applySize(target.dataset.mode, Number(target.dataset.value)); break;
+    case 'size-apply': applySize('amount', Number(target.dataset.value)); break;
     case 'size-mode': app.ui.sizeMode = target.dataset.value; render(); focusSize(); break;
     case 'size-confirm': confirmSize(); break;
     case 'set-winner': setHand({ ...app.hand, winners: [target.dataset.pos] }); break;
@@ -698,6 +793,7 @@ function setHandQuietly(next) {
   store.saveDraft(next);
   document.getElementById('crumb-sub').textContent = next.tournament
     ? `${next.tournament} · ${stakesLabel(next)}` : stakesLabel(next);
+  if (app.step === 1) refreshValidation();
 }
 
 document.addEventListener('keydown', (event) => {
@@ -816,18 +912,23 @@ function applySize(mode, value) {
   }));
 }
 
+/** The aggressive verb: whatever is typed, or the minimum if nothing is. */
 function confirmSize() {
+  const state = currentState();
+  if (!state.legal) return;
   const raw = parseFloat(app.ui.sizeValue);
-  if (!Number.isFinite(raw)) { toast(`Type a size, or tap one above`); return; }
-  applySize(app.ui.sizeMode, raw);
+  if (!Number.isFinite(raw)) { applySize('amount', fromUnits(state.legal.minTo)); return; }
+  applySize(sizeMode(state), raw);
 }
 
+/** Update the parts that depend on the typed size, without losing the caret. */
 function refreshSizeMeta() {
   const state = currentState();
   if (!state.legal) return;
   const meta = document.querySelector('.sizemeta');
-  if (!meta) return;
-  meta.outerHTML = sizeMeta(state.legal);
+  if (meta) meta.outerHTML = sizeMeta(state.legal, state);
+  const aggro = document.querySelector('.verbs .aggro');
+  if (aggro) aggro.textContent = aggroLabel(state.legal, state);
 }
 
 function focusSize() {

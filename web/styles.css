@@ -224,7 +224,8 @@ button.ghost.back { font-size: 20px; line-height: 1; padding: 4px 12px; }
   border: 1px solid var(--line); background: var(--panel-2); color: var(--ink);
 }
 .verbs button.fold { color: var(--danger); }
-.verbs button.aggro { background: var(--warn); color: #2a1a00; border-color: var(--warn); }
+.verbs button.aggro { background: var(--warn); color: #2a1a00; border-color: var(--warn);
+  font-size: 14px; }
 .verbs button.check { color: var(--accent); }
 .verbs button:disabled { opacity: .35; cursor: default; }
 
