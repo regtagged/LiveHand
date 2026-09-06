@@ -18,7 +18,18 @@ const SHELL = [
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
+  // `cache: 'reload'` matters more than it looks. addAll() fetches through the
+  // normal HTTP cache, so a worker installing moments after a deploy can pick
+  // up the CDN's still-stale copies and store them under the *new* cache name
+  // — pinning the old build in place until the deploy after this one. Going
+  // straight to the network on install is what makes the version key honest.
+  event.waitUntil(
+    caches.open(CACHE)
+      .then((cache) => Promise.all(
+        SHELL.map((url) => cache.add(new Request(url, { cache: 'reload' }))),
+      ))
+      .then(() => self.skipWaiting()),
+  );
 });
 
 self.addEventListener('activate', (event) => {
