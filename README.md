@@ -56,7 +56,8 @@ which is asserted by a test.
 
 Hands are usually described as one effective depth — "40bb effective", "we were
 both 100bb" — so **Everyone the same depth** sets every listed seat at once,
-and for most hands that is the only stack entry needed. Any seat that still
+either from the presets or by typing any depth you like, and for most hands
+that is the only stack entry needed. Any seat that still
 needs its own number offers the same one-tap depths, or you can type an exact
 amount. Every listed seat was listed on purpose, so
 they all get the shortcut. A villain needs a stack for **All-in** to mean
@@ -106,9 +107,14 @@ every export says the hand is unfinished and whose action it is rather than
 implying a result: no showdown, no winner, "Pot so far" instead of a total, and
 players marked still to act rather than mucked.
 
-**4 · Export.** Alongside the three formats there is **Keep them secret**,
-which exports your own two cards as `??` — a mystery hand, so people answer the
-spot before they know what you held. It redacts them everywhere at once,
+A hand can also be entered as a **mystery hand**: instead of picking your two
+cards, tap *Mystery hand* — in the card picker or under your card slots — and
+the cards are never recorded at all. The slots show face-down `?` backs from
+then on. Toggling it back to *My hand* lets you pick them normally.
+
+**4 · Export.** The same switch is on the export screen as **Keep them secret**,
+so a hand you did record can still be posted with your own two cards as `??` —
+people answer the spot before they know what you held. It redacts them everywhere at once,
 including the data embedded in the replayer file, so nothing leaks through the
 one export people can open in a text editor.
 

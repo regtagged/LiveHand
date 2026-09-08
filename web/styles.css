@@ -147,6 +147,10 @@ button.ghost.back { font-size: 20px; line-height: 1; padding: 4px 12px; }
   border: 1px solid var(--line); background: var(--panel); color: var(--muted); cursor: pointer; }
 .seat-row .herobtn[aria-pressed='true'] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .alldepths { margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.alldepths .sizerow input { flex: 1; min-width: 0; }
+.mysterybtn { width: 100%; margin-top: 10px; padding: 11px; font-size: 14px; }
+.cardslots .cardface.back { display: grid; place-items: center; background: #33334a; color: #c7c7d1;
+  border: 1px solid #6b6b7a; box-shadow: none; font-size: 20px; font-weight: 700; }
 .seat-cell { display: flex; flex-direction: column; gap: 6px; }
 .seat-depths { margin: 0 0 2px; }
 .seat-depths button { padding: 6px 4px; min-width: 44px; }

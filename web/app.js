@@ -35,7 +35,7 @@ const app = {
   step: 1,
   // sizeMode null means "whatever suits this street" — see sizeMode().
   ui: { sizeMode: null, sizeValue: '', exportTab: 'text', showNames: false, picker: null,
-        confirmDelete: null },
+        confirmDelete: null, allDepth: '' },
 };
 
 const esc = (value) => String(value).replace(/[&<>"']/g, (c) => (
@@ -81,10 +81,13 @@ function cardHtml(card, small = false) {
     + `<span class="r">${card.rank}</span><span class="s">${SUIT_GLYPH[card.suit]}</span></span>`;
 }
 
-function cardSlots(cards, count, action, extra = '') {
+function cardSlots(cards, count, action, { extra = '', facedown = false } = {}) {
   const slots = [];
   for (let i = 0; i < count; i++) {
-    slots.push(`<button data-act="${action}" data-index="${i}" ${extra}>${cardHtml(cards[i])}</button>`);
+    const face = facedown
+      ? '<span class="cardface back">?</span>'
+      : cardHtml(cards[i]);
+    slots.push(`<button data-act="${action}" data-index="${i}" ${extra}>${face}</button>`);
   }
   return `<div class="cardslots">${slots.join('')}</div>`;
 }
@@ -97,8 +100,8 @@ function cardSlots(cards, count, action, extra = '') {
  * `onPick` receives all the cards at once, so the sheet stays open until
  * `count` of them have been chosen.
  */
-function openPicker({ title, count, taken, onPick }) {
-  app.ui.picker = { title, count, taken, onPick, chosen: [] };
+function openPicker({ title, count, taken, onPick, mystery = false }) {
+  app.ui.picker = { title, count, taken, onPick, mystery, chosen: [] };
   renderPicker();
 }
 
@@ -121,7 +124,9 @@ function renderPicker() {
     </div>
     ${picker.chosen.length
       ? `<p class="hint">Picked ${picker.chosen.map(cardStr).join(' ')}</p>`
-      : ''}`;
+      : ''}
+    ${picker.mystery ? `<button class="secondary mysterybtn" data-act="mystery-hand">
+      Mystery hand — don't record my cards</button>` : ''}`;
   sheet.hidden = false;
 }
 
@@ -259,10 +264,15 @@ function renderTable() {
       stacks in ${unitLabel()}. The blinds post either way, so there is no need to list them unless
       they did something; a stack is only needed where it matters.</p>
     ${hand.players.length ? `<div class="field alldepths">
-      <label>Everyone the same depth</label>
+      <label for="alldepth">Everyone the same depth</label>
       <div class="presets">
         ${DEPTHS.map((depth) => `<button data-act="depth-all" data-value="${depth}"
           aria-pressed="${allAtDepth(hand, depth)}"><b>${depth}</b><i>BB</i></button>`).join('')}
+      </div>
+      <div class="sizerow" style="margin-top:8px">
+        <input id="alldepth" type="text" inputmode="decimal" data-field="all-depth"
+               value="${esc(app.ui.allDepth)}" placeholder="or type a depth in BB">
+        <button class="ghost" data-act="depth-all-typed">Set all</button>
       </div>
     </div>` : ''}
 
@@ -295,7 +305,14 @@ function renderTable() {
     <p class="hint" style="margin:0 0 10px">${hero
       ? `Dealt to ${esc(hero.name === hero.position ? hero.position : `${hero.name} (${hero.position})`)}`
       : 'Pick your seat first'}</p>
-    ${hero ? cardSlots(hero.cards, 2, 'pick-hero') : ''}
+    ${hero ? cardSlots(hero.cards, 2, 'pick-hero', { facedown: hand.hideHeroCards }) : ''}
+    ${hero ? `<div class="segment" style="margin-top:10px">
+      <button data-act="hide-cards" data-value="show" aria-pressed="${!hand.hideHeroCards}">My hand</button>
+      <button data-act="hide-cards" data-value="hide" aria-pressed="${hand.hideHeroCards}">Mystery hand</button>
+    </div>
+    <p class="hint">${hand.hideHeroCards
+      ? 'Exports as ?? — ask what people would do before telling them what you had.'
+      : 'Or post it as a mystery hand and keep your cards to yourself.'}</p>` : ''}
   </div>
 
   <div id="setup-problems">${problemsHtml(problems)}</div>
@@ -368,6 +385,20 @@ function depthRow(position, hand) {
     ${DEPTHS.map((depth) => `<button data-act="depth" data-pos="${position}"
       data-value="${depth}"><b>${depth}</b><i>BB</i></button>`).join('')}
   </div>`;
+}
+
+/**
+ * Apply a depth the user typed rather than one of the presets.
+ *
+ * Always read as big blinds, matching the presets beside it, so the row means
+ * one thing whichever unit the hand is being entered in.
+ */
+function applyTypedDepth() {
+  const depth = parseFloat(app.ui.allDepth);
+  if (!Number.isFinite(depth) || depth <= 0) { toast('Type a depth in big blinds'); return; }
+  app.ui.allDepth = '';
+  setHand(setAllStacks(app.hand, roundForUnit(Math.round(depth * app.hand.bb), app.hand.unit)));
+  toast(`Everyone ${fmtAmount(toUnits(depth), 'bb')} BB deep`);
 }
 
 /** True when every listed seat is already sitting on exactly this depth. */
@@ -886,7 +917,11 @@ function handleClick(target) {
     case 'depth': setHand(updatePlayer(app.hand, target.dataset.pos, {
       stack: Number(target.dataset.value) * app.hand.bb,
     })); break;
-    case 'depth-all': setHand(setAllStacks(app.hand, Number(target.dataset.value) * app.hand.bb)); break;
+    case 'depth-all':
+      app.ui.allDepth = '';
+      setHand(setAllStacks(app.hand, Number(target.dataset.value) * app.hand.bb));
+      break;
+    case 'depth-all-typed': applyTypedDepth(); break;
     case 'fold-to-me': foldToHero(); break;
     case 'toggle-names': app.ui.showNames = !app.ui.showNames; render(); break;
     case 'toggle-seat': {
@@ -923,6 +958,18 @@ function handleClick(target) {
 
     case 'export-tab': app.ui.exportTab = target.dataset.value; render(); break;
     case 'hide-cards': setHand({ ...app.hand, hideHeroCards: target.dataset.value === 'hide' }); break;
+    case 'mystery-hand': {
+      // Entering a mystery hand means never recording the cards, not recording
+      // them and hiding them afterwards.
+      const hero = heroOf(app.hand);
+      closeSheet();
+      setHand({
+        ...(hero ? updatePlayer(app.hand, hero.position, { cards: [] }) : app.hand),
+        hideHeroCards: true,
+      });
+      toast('Mystery hand — your cards stay yours');
+      break;
+    }
     case 'copy-text': copyText(); break;
     case 'download': downloadCurrent(); break;
     case 'share': shareCurrent(); break;
@@ -973,6 +1020,9 @@ document.addEventListener('input', (event) => {
   if (!field) return;
 
   if (field === 'size') { app.ui.sizeValue = event.target.value; refreshSizeMeta(); return; }
+  // Held in UI state, not on the hand: it is a shortcut for filling the seats,
+  // not a property of the hand itself.
+  if (field === 'all-depth') { app.ui.allDepth = event.target.value; return; }
   if (field === 'tableSize') { setHand(resizeTable(app.hand, Number(event.target.value))); return; }
   if (['sb', 'bb', 'ante'].includes(field)) {
     setHandQuietly({ ...app.hand, [field]: parseAmount(event.target.value) || 0 });
@@ -994,6 +1044,10 @@ document.addEventListener('keydown', (event) => {
   if (event.key === 'Enter' && event.target.dataset.field === 'size') {
     event.preventDefault();
     confirmSize();
+  }
+  if (event.key === 'Enter' && event.target.dataset.field === 'all-depth') {
+    event.preventDefault();
+    applyTypedDepth();
   }
   if (event.key === 'Escape' && !sheet.hidden) closeSheet();
 });
@@ -1040,6 +1094,9 @@ function pickHoleCards(position, startIndex) {
   openPicker({
     title: `${player.name}'s cards`,
     count,
+    // Offered only for your own hand: a villain's cards are unknown by default
+    // anyway, so there is nothing there to keep secret.
+    mystery: !!player.isHero,
     taken: usedCards(app.hand).filter((c) => !player.cards.some((own) => sameCard(own, c))),
     onPick: (picked) => {
       const next = count === 2 ? picked : Object.assign(cards.slice(), { [startIndex]: picked[0] });
