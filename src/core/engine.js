@@ -89,25 +89,46 @@ function postBlinds(hand, runtime) {
   const posts = [];
   const order = actionOrder(hand.players.map((p) => p.position), 'preflop', hand.tableSize, hand.scheme);
   let deadPot = 0;
+  // Chips in the pot that belong to nobody in the hand: blinds and antes from
+  // seats the user did not list. They are real money in the middle, but there
+  // is no player to charge them to, so side pots have to be told about them.
+  let deadUnattached = 0;
 
   const ante = anteAmount(hand);
+  const seated = (position) => runtime.get(position);
+  // The largest unlisted blind, which still counts as money matched on the
+  // preflop street even though no listed player put it there.
+  let deadFloor = 0;
+  const postDead = (position, kind, amount) => {
+    deadPot += amount;
+    deadUnattached += amount;
+    if (kind !== 'ante') deadFloor = Math.max(deadFloor, amount);
+    posts.push({ position, kind, amount, dead: true });
+  };
+
   if (hand.anteMode === 'each' && ante > 0) {
     for (const position of order) {
-      const player = runtime.get(position);
-      const paid = commit(player, ante, true);
+      const paid = commit(seated(position), ante, true);
       if (paid > 0) { deadPot += paid; posts.push({ position, kind: 'ante', amount: paid }); }
     }
+    // The blinds are at the table whether or not they were listed, so they ante
+    // either way — listing a seat must not change what is in the pot.
+    for (const position of ['SB', 'BB']) if (!seated(position)) postDead(position, 'ante', ante);
   } else if (hand.anteMode === 'bb' && ante > 0) {
-    const player = runtime.get('BB');
+    const player = seated('BB');
     if (player) {
       const paid = commit(player, ante, true);
       if (paid > 0) { deadPot += paid; posts.push({ position: 'BB', kind: 'ante', amount: paid }); }
+    } else {
+      postDead('BB', 'ante', ante);
     }
   }
 
   for (const [position, kind, amount] of [['SB', 'sb', hand.sb], ['BB', 'bb', hand.bb]]) {
-    const player = runtime.get(position);
-    if (!player || amount <= 0) continue;
+    if (amount <= 0) continue;
+    const player = seated(position);
+    // A blind nobody listed still posts — it is dead money the hand plays for.
+    if (!player) { postDead(position, kind, amount); continue; }
     const paid = commit(player, amount);
     player.streetCommit = paid;
     posts.push({ position, kind, amount: paid });
@@ -121,7 +142,7 @@ function postBlinds(hand, runtime) {
     posts.push({ position: straddle.position, kind: 'straddle', amount: player.streetCommit });
   }
 
-  return { posts, deadPot };
+  return { posts, deadPot, deadUnattached, deadFloor };
 }
 
 /** Everyone who hasn't folded. */
@@ -150,13 +171,16 @@ function actingCount(runtime) {
  * Folded players count here: if a raise goes uncalled because everyone passed,
  * the raiser gets back everything above the largest bet anyone else made.
  */
-function returnUncalledBet(runtime) {
+function returnUncalledBet(runtime, deadFloor = 0) {
   const committed = [...runtime.values()].filter((p) => p.streetCommit > 0);
   if (!committed.length) return null;
 
   const sorted = committed.slice().sort((a, b) => b.streetCommit - a.streetCommit);
   const top = sorted[0];
-  const matched = sorted.length > 1 ? sorted[1].streetCommit : 0;
+  // `deadFloor` is what an unlisted blind has in front of it. Those chips match
+  // a raise just as a listed blind's would, so an open that everyone folds to
+  // is uncalled only above the blind — not all the way down to zero.
+  const matched = Math.max(sorted.length > 1 ? sorted[1].streetCommit : 0, deadFloor);
   const uncalled = top.streetCommit - matched;
   if (uncalled <= 0) return null;
 
@@ -224,7 +248,7 @@ export function sizeToTotal(legal, mode, value, hand) {
 export function replay(hand) {
   const runtime = initRuntime(hand);
   const positions = hand.players.map((p) => p.position);
-  const { posts, deadPot } = postBlinds(hand, runtime);
+  const { posts, deadPot, deadUnattached, deadFloor } = postBlinds(hand, runtime);
 
   const streetTotal = () => [...runtime.values()].reduce((sum, p) => sum + p.streetCommit, 0);
 
@@ -260,7 +284,8 @@ export function replay(hand) {
       for (const post of posts) {
         if (post.kind === 'ante') continue;
         const player = runtime.get(post.position);
-        player.streetCommit = post.amount;
+        // An unlisted blind sets the price even though nobody is sitting there.
+        if (player) player.streetCommit = post.amount;
         betToCall = Math.max(betToCall, post.amount);
       }
     }
@@ -349,7 +374,7 @@ export function replay(hand) {
       break;
     }
 
-    const uncalled = returnUncalledBet(runtime);
+    const uncalled = returnUncalledBet(runtime, streetId === 'preflop' ? deadFloor : 0);
     if (uncalled) { uncalled.street = streetId; returns.push(uncalled); }
 
     for (const player of runtime.values()) { collected += player.streetCommit; player.streetCommit = 0; }
@@ -379,11 +404,14 @@ export function replay(hand) {
     toAct,
     legal,
     needsBoardFor,
-    board: hand.board || [],
+    // Only the cards this hand actually reached. Nothing downstream should be
+    // able to print a river for a hand that ended before the flop, however the
+    // extra cards got into the draft.
+    board: (hand.board || []).slice(0, streets.length ? BOARD_LENGTH[streets[streets.length - 1].id] : 0),
   };
 
   if (status === 'complete' || status === 'showdown') {
-    Object.assign(result, settle(hand, players, collected, status));
+    Object.assign(result, settle(hand, players, collected, status, deadUnattached));
   }
   return result;
 }
@@ -392,7 +420,7 @@ export function replay(hand) {
  * Work out who gets what. Side pots are built by contribution level so that a
  * short stack can only win the part of the pot they actually covered.
  */
-export function settle(hand, players, pot, status) {
+export function settle(hand, players, pot, status, deadUnattached = 0) {
   const live = players.filter((p) => !p.folded);
   if (live.length === 0) return { pots: [], winners: [], showdown: [], settled: false };
 
@@ -442,7 +470,7 @@ export function settle(hand, players, pot, status) {
     previous = level;
   }
 
-  const dead = players.reduce((sum, p) => sum + (p.contributed - p.wagered), 0);
+  const dead = players.reduce((sum, p) => sum + (p.contributed - p.wagered), 0) + deadUnattached;
   if (dead > 0) {
     if (pots.length) pots[0].amount += dead;
     else pots.push({ amount: dead, eligible: live.map((p) => p.position) });

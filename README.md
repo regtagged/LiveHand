@@ -43,16 +43,21 @@ the blinds and table size usually repeat), whether you're typing *chips* or
 one big blind by definition, so it follows the blind rather than being typed and
 going stale at the next level.
 
-**2 · Table.** Eight seats by default, all switched off except the blinds.
+**2 · Table.** Eight seats by default, all switched off — the blinds included.
 Switch on the ones that were in the hand — most shared hands name three or four
 players — and tap **YOU** on your seat, which seats you if you weren't already
 and opens the deck for your two cards. Nothing is ever made hero for you.
 
+**The blinds post whether or not you list them.** A blind you leave switched
+off still puts its chips in as dead money and still sets the price of the pot,
+so listing it is a note-taking decision rather than a fact about the hand: the
+pot, the uncalled-bet return and the result all come out identical either way,
+which is asserted by a test.
+
 Any seat that still needs a stack offers one-tap depths (20/30/40/60/100 bb),
-or you can type an exact number. They appear for your own seat and for anyone
-you deliberately switched on — never for a blind you left alone, since those
-are in the hand only because they post. A villain needs a stack for **All-in**
-to mean anything, so give the aggressor a depth if the hand ends in a jam.
+or you can type an exact number. Every listed seat was listed on purpose, so
+they all get the shortcut. A villain needs a stack for **All-in** to mean
+anything, so give the aggressor a depth if the hand ends in a jam.
 
 **Only your own stack is required.** A blind that posts and folds is in the hand
 whether you looked its stack up or not, so leaving it blank is fine: the engine
@@ -116,6 +121,14 @@ keyboard is where the time and the typos go on a phone.
 
 All three formats are previewed, with copy / download / share. The share button
 uses the native share sheet on phones that have one.
+
+**Save hand** keeps a hand on the device, and the Session screen lists what you
+have kept: tap one to reopen it, or delete it in two taps. It is all
+localStorage — no account, nothing leaves the phone — so that list is the whole
+library, and there is no copy of a deleted hand anywhere else.
+
+**Next hand** keeps the table and the stakes, clears the cards and the action,
+and opens the deck straight away for the next holding.
 
 ## What the engine guarantees
 

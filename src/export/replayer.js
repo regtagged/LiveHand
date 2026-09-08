@@ -35,14 +35,16 @@ export function buildFrames(hand, state) {
   }));
   const find = (position) => players.find((p) => p.position === position);
   const frames = [];
-  let collected = 0;
+  // Whatever is already in the middle before anyone acts: antes, plus the
+  // blinds of any seat the hand did not list. The engine has that figure, and
+  // re-deriving it from the posts would miss the seats with nobody on them.
+  let collected = state.streets.length ? state.streets[0].potStart : 0;
 
   for (const post of state.posts) {
     const player = find(post.position);
     if (!player) continue;
     player.stack -= post.amount;
-    if (post.kind === 'ante') collected += post.amount;
-    else player.bet += post.amount;
+    if (post.kind !== 'ante') player.bet += post.amount;
   }
 
   const snapshot = (streetId, board, caption, acting) => {

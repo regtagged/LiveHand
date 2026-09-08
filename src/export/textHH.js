@@ -63,7 +63,10 @@ export function toTextHH(hand, state) {
   }
 
   for (const post of state.posts) {
-    const name = state.players.find((p) => p.position === post.position).name;
+    // A blind nobody listed still posts; there is just no player to name, so
+    // the seat speaks for itself.
+    const seated = state.players.find((p) => p.position === post.position);
+    const name = seated ? seated.name : post.position;
     if (post.kind === 'ante') out.push(`${name}: posts the ante ${money(post.amount)}`);
     if (post.kind === 'sb') out.push(`${name}: posts small blind ${money(post.amount)}`);
     if (post.kind === 'bb') out.push(`${name}: posts big blind ${money(post.amount)}`);

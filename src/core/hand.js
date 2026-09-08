@@ -10,8 +10,15 @@ import { parseCards } from './cards.js';
 import { seatRing } from './positions.js';
 import { toUnits } from './amount.js';
 
-/** Blinds always post, so those two seats can never be dropped from a hand. */
-export const REQUIRED_POSITIONS = ['SB', 'BB'];
+/**
+ * The blinds post whether or not anyone lists them.
+ *
+ * They used to be forced into every hand, which meant two seats you often had
+ * nothing to say about — and could not switch off. The engine now posts an
+ * unlisted blind as dead money, so a hand lists only the seats that did
+ * something, and "in the hand" means what it sounds like.
+ */
+export const BLIND_POSITIONS = ['SB', 'BB'];
 
 export function newHandId() {
   const now = new Date();
@@ -54,10 +61,9 @@ export function createHand(overrides = {}) {
     anteMode: 'bb',
     tableSize,
     scheme,
-    // Only the blinds to begin with. Most shared hands name three or four
-    // seats, so starting from an empty table and switching seats on is less
-    // work than clearing out six you never meant to list.
-    players: ring.filter((position) => REQUIRED_POSITIONS.includes(position)).map(blankPlayer),
+    // An empty table. Most shared hands name three or four seats, so switching
+    // on the ones that acted is less work than clearing out the rest.
+    players: [],
     straddles: [],
     board: [],
     actions: [],
@@ -74,6 +80,18 @@ function blankPlayer(position) {
 }
 
 /**
+ * Everything about how a hand was *played*, as opposed to who was at the table.
+ *
+ * Changing the seats invalidates the action — the order of play is different —
+ * and it invalidates the board with it. Clearing the actions but keeping the
+ * cards leaves a hand that folded preflop still carrying a river, which then
+ * shows up in every export.
+ */
+function clearPlay(hand) {
+  return { ...hand, board: [], actions: [], winners: [] };
+}
+
+/**
  * Reshape a hand for a new table size, keeping the seats already chosen that
  * still exist at the new size. Seats that were never switched on stay off.
  */
@@ -81,14 +99,13 @@ export function resizeTable(hand, tableSize, scheme = hand.scheme) {
   const ring = seatRing(tableSize, scheme);
   const previous = new Map(hand.players.map((p) => [p.position, p]));
   const players = ring
-    .filter((position) => previous.has(position) || REQUIRED_POSITIONS.includes(position))
-    .map((position) => previous.get(position) || blankPlayer(position));
-  return { ...hand, tableSize, scheme, players, actions: [], winners: [] };
+    .filter((position) => previous.has(position))
+    .map((position) => previous.get(position));
+  return clearPlay({ ...hand, tableSize, scheme, players });
 }
 
 /** Include or drop a seat. Blinds can't be dropped; dropping resets the action. */
 export function togglePlayer(hand, position, included) {
-  if (REQUIRED_POSITIONS.includes(position) && !included) return hand;
   const ring = seatRing(hand.tableSize, hand.scheme);
   const current = new Map(hand.players.map((p) => [p.position, p]));
   if (included) current.set(position, current.get(position) || blankPlayer(position));
@@ -96,7 +113,7 @@ export function togglePlayer(hand, position, included) {
   // No seat is ever made the hero automatically — guessing puts "you" on a
   // random seat, and validateSetup asks for it explicitly instead.
   const players = ring.filter((p) => current.has(p)).map((p) => current.get(p));
-  return { ...hand, players, actions: [], winners: [] };
+  return clearPlay({ ...hand, players });
 }
 
 export function setHero(hand, position) {
@@ -128,10 +145,7 @@ export function validateSetup(hand) {
   if (hand.sb < 0) problems.push('Small blind cannot be negative.');
   if (hand.sb > hand.bb) problems.push('Small blind is larger than the big blind.');
   if (hand.anteMode === 'each' && !hand.ante) problems.push('Enter an ante, or set the ante to none.');
-  if (hand.players.length < 2) problems.push('A hand needs at least two players.');
-  for (const required of REQUIRED_POSITIONS) {
-    if (!hand.players.some((p) => p.position === required)) problems.push(`${required} must be in the hand.`);
-  }
+  if (hand.players.length < 2) problems.push('Switch on the seats that were in the hand — at least two.');
   // Only your own stack is required. A blind that folds out of the way is still
   // in the hand — it has to post — but making someone look up a stack they
   // never saw, for a seat that did nothing, is busywork; those are left unknown

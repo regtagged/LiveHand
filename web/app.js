@@ -12,7 +12,7 @@ import { RANKS, SUITS, SUIT_GLYPH, SUIT_NAME, cardStr, sameCard } from './src/co
 import { replay, sizeToTotal, withAction, withoutLastAction, STREET_LABEL, BOARD_LENGTH } from './src/core/engine.js';
 import {
   createHand, resizeTable, togglePlayer, setHero, updatePlayer, validateSetup,
-  usedCards, reviveHand, nextHand, anteAmount, heroOf, REQUIRED_POSITIONS,
+  usedCards, reviveHand, nextHand, anteAmount, heroOf,
 } from './src/core/hand.js';
 import { money, stakesLabel, isUnfinished, openQuestion } from './src/core/narrate.js';
 import { seatRing } from './src/core/positions.js';
@@ -34,7 +34,8 @@ const app = {
   // needed — which is most of the cost of a preflop-only spot.
   step: 1,
   // sizeMode null means "whatever suits this street" — see sizeMode().
-  ui: { sizeMode: null, sizeValue: '', exportTab: 'text', showNames: false, picker: null },
+  ui: { sizeMode: null, sizeValue: '', exportTab: 'text', showNames: false, picker: null,
+        confirmDelete: null },
 };
 
 const esc = (value) => String(value).replace(/[&<>"']/g, (c) => (
@@ -179,6 +180,11 @@ function renderSession() {
     </div>
   </div>
 
+  ${renderLibrary()}
+
+  <div hidden>
+  </div>
+
   <div class="card">
     <h2>Stakes</h2>
     <div class="field">
@@ -250,17 +256,16 @@ function renderTable() {
     <h2>Seats and stacks <button class="ghost" data-act="toggle-names" style="float:right;margin-top:-4px">
       ${app.ui.showNames ? 'Hide names' : 'Names'}</button></h2>
     <p class="hint" style="margin:0 0 10px">Switch on the seats that were in the hand and enter their
-      stacks in ${unitLabel()}. A stack is only needed for seats that put chips in — leave a blind
-      blank if it just posts and folds.</p>
+      stacks in ${unitLabel()}. The blinds post either way, so there is no need to list them unless
+      they did something; a stack is only needed where it matters.</p>
     <div class="seatgrid">
       ${ring.map((position) => {
         const player = hand.players.find((p) => p.position === position);
         const on = included.has(position);
-        const locked = position === 'SB' || position === 'BB';
         return `<div class="seat-cell">
           <div class="seat-row ${on ? '' : 'off'} ${player && player.isHero ? 'hero' : ''}">
-            <button class="toggle" data-act="toggle-seat" data-pos="${position}" aria-pressed="${on}"
-              ${locked ? 'disabled title="Blinds always post"' : ''}>${on ? '&#10003;' : '&#43;'}</button>
+            <button class="toggle" data-act="toggle-seat" data-pos="${position}"
+              aria-pressed="${on}">${on ? '&#10003;' : '&#43;'}</button>
             <span class="pos">${position}</span>
             <input type="text" inputmode="decimal" data-stack="${position}" ${on ? '' : 'disabled'}
               value="${player ? amountValue(player.stack) : ''}" placeholder="stack">
@@ -292,16 +297,59 @@ function renderTable() {
 }
 
 /**
- * Whether to offer one-tap depths under a seat.
+ * Hands kept on this device.
  *
- * Shown for a seat with no stack yet that actually needs one: your own, always,
- * and anyone you deliberately switched on. Never for a blind you left alone —
- * those are in the hand only because they post, and prompting for a stack there
- * would undo the point of stacks being optional.
+ * Everything is in localStorage — no account, nothing leaves the phone — so
+ * this list is the whole library. Deleting asks twice, because there is no
+ * undo and no copy of the hand anywhere else.
+ */
+function renderLibrary() {
+  const hands = store.savedHands();
+  if (!hands.length) {
+    return `<div class="card">
+      <h2>Saved hands</h2>
+      <p class="hint">None yet. Save a hand from the Export step and it is kept here,
+        on this device only.</p>
+    </div>`;
+  }
+  return `<div class="card">
+    <h2>Saved hands <span class="count">${hands.length}</span></h2>
+    <ul class="library">
+      ${hands.map((saved) => {
+        const doomed = app.ui.confirmDelete === saved.id;
+        return `<li>
+          <button class="libopen" data-act="open-hand" data-id="${esc(saved.id)}">
+            <b>${esc(libraryTitle(saved))}</b><i>${esc(librarySubtitle(saved))}</i>
+          </button>
+          <button class="ghost ${doomed ? 'danger' : ''}" data-act="delete-hand" data-id="${esc(saved.id)}">
+            ${doomed ? 'Sure?' : 'Delete'}</button>
+        </li>`;
+      }).join('')}
+    </ul>
+  </div>`;
+}
+
+function libraryTitle(saved) {
+  const hero = (saved.players || []).find((p) => p.isHero);
+  const cards = hero && hero.cards && hero.cards.length === 2
+    ? (saved.hideHeroCards ? '??' : hero.cards.map(cardStr).join(' '))
+    : '';
+  const seat = hero ? hero.position : '';
+  const who = [cards, seat].filter(Boolean).join(' ');
+  return [saved.tournament || 'Live hand', who].filter(Boolean).join(' · ');
+}
+
+function librarySubtitle(saved) {
+  const when = saved.savedAt ? new Date(saved.savedAt).toLocaleDateString() : '';
+  return [stakesLabel(saved), when].filter(Boolean).join(' · ');
+}
+
+/**
+ * Whether to offer one-tap depths under a seat. Every listed seat was listed on
+ * purpose, so any of them without a stack yet gets the shortcut.
  */
 function offerDepths(player) {
-  if (!player || player.stack > 0) return false;
-  return player.isHero || !REQUIRED_POSITIONS.includes(player.position);
+  return !!player && !(player.stack > 0);
 }
 
 function depthRow(position, hand) {
@@ -685,7 +733,7 @@ function renderExport() {
     <h2>Notes</h2>
     <textarea data-field="note" placeholder="What was the question?">${esc(hand.note || '')}</textarea>
     <div class="exportbtns">
-      <button class="secondary" data-act="save-hand">Save to this device</button>
+      <button class="secondary" data-act="save-hand">Save hand</button>
       <button class="secondary" data-act="restart">New hand</button>
     </div>
   </div>`;
@@ -861,7 +909,31 @@ function handleClick(target) {
     case 'copy-text': copyText(); break;
     case 'download': downloadCurrent(); break;
     case 'share': shareCurrent(); break;
-    case 'save-hand': store.saveHand(app.hand); toast('Hand saved on this device'); break;
+    case 'save-hand': {
+      store.saveHand(app.hand);
+      const count = store.savedHands().length;
+      render();
+      toast(`Saved on this device — ${count} hand${count === 1 ? '' : 's'}`);
+      break;
+    }
+    case 'open-hand': {
+      const saved = store.savedHands().find((h) => h.id === target.dataset.id);
+      if (!saved) { toast('That hand is no longer saved'); break; }
+      app.ui.confirmDelete = null;
+      app.step = 3;
+      setHand(reviveHand(saved));
+      break;
+    }
+    case 'delete-hand': {
+      const id = target.dataset.id;
+      // Two taps: there is no undo, and no copy of this hand anywhere else.
+      if (app.ui.confirmDelete !== id) { app.ui.confirmDelete = id; render(); break; }
+      store.deleteHand(id);
+      app.ui.confirmDelete = null;
+      render();
+      toast('Deleted');
+      break;
+    }
     default: break;
   }
 }
@@ -1068,7 +1140,11 @@ function undo() {
 function restart() {
   app.step = 1;
   setHand(nextHand(app.hand));
-  toast('New hand — same table and stakes');
+  // Landing on a table that looks exactly as you left it reads as "nothing
+  // happened", so go straight to the one thing that is genuinely new.
+  const hero = heroOf(app.hand);
+  if (hero) autoOpen(() => pickHoleCards(hero.position, 0));
+  toast('New hand — same table, fresh cards');
 }
 
 /* -------------------------------------------------------------------- boot */

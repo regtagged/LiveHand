@@ -33,23 +33,23 @@ test('dropping seats keeps the survivors in the right order', () => {
   assert.deepEqual(order, ['CO', 'BTN', 'SB', 'BB']);
 });
 
-test('a new hand starts with the blinds only, and nobody as hero', () => {
+test('a new hand starts with an empty table and nobody as hero', () => {
   const hand = createHand();
   assert.equal(hand.tableSize, 8);
   assert.equal(hand.anteMode, 'bb', 'a big blind ante is the modern default');
-  assert.deepEqual(hand.players.map((p) => p.position), ['SB', 'BB']);
+  assert.deepEqual(hand.players, [], 'not even the blinds: they post without being listed');
   assert.ok(!hand.players.some((p) => p.isHero), 'the hero is chosen, never guessed');
-  assert.ok(validateSetup(hand).some((p) => /Pick which seat is you/.test(p)));
+  assert.ok(validateSetup(hand).some((p) => /at least two/.test(p)));
 });
 
-test('the blinds cannot be dropped from a hand', () => {
+test('any seat can be switched on and off, blinds included', () => {
   let hand = createHand({ tableSize: 6 });
-  hand = togglePlayer(hand, 'SB', false);
-  assert.ok(hand.players.some((p) => p.position === 'SB'));
-  hand = togglePlayer(hand, 'LJ', true);
-  assert.ok(hand.players.some((p) => p.position === 'LJ'));
-  hand = togglePlayer(hand, 'LJ', false);
-  assert.ok(!hand.players.some((p) => p.position === 'LJ'));
+  for (const position of ['SB', 'LJ']) {
+    hand = togglePlayer(hand, position, true);
+    assert.ok(hand.players.some((p) => p.position === position));
+    hand = togglePlayer(hand, position, false);
+    assert.ok(!hand.players.some((p) => p.position === position));
+  }
 });
 
 test('switching a seat on never makes it the hero behind your back', () => {
@@ -61,7 +61,7 @@ test('switching a seat on never makes it the hero behind your back', () => {
 
 test('resizing the table keeps the seats already chosen, and their stacks', () => {
   let hand = createHand({ tableSize: 6 });
-  for (const position of ['LJ', 'HJ', 'CO', 'BTN']) hand = togglePlayer(hand, position, true);
+  for (const position of ['SB', 'BB', 'LJ', 'HJ', 'CO', 'BTN']) hand = togglePlayer(hand, position, true);
   hand = { ...hand, players: hand.players.map((p) => ({ ...p, stack: toUnits(50) })) };
 
   const smaller = resizeTable(hand, 3);
@@ -71,34 +71,39 @@ test('resizing the table keeps the seats already chosen, and their stacks', () =
 
 test('resizing does not switch seats back on that were left off', () => {
   let hand = createHand({ tableSize: 6 });
+  hand = togglePlayer(hand, 'BB', true);
   hand = togglePlayer(hand, 'BTN', true);
   const bigger = resizeTable(hand, 9);
-  assert.deepEqual(bigger.players.map((p) => p.position), ['SB', 'BB', 'BTN']);
+  assert.deepEqual(bigger.players.map((p) => p.position), ['BB', 'BTN']);
 });
 
 test('setup problems are reported as sentences, and clear when fixed', () => {
   let hand = createHand({ tableSize: 6 });
-  assert.ok(validateSetup(hand).some((p) => /Pick which seat is you/.test(p)));
+  assert.ok(validateSetup(hand).some((p) => /at least two/.test(p)));
+  hand = togglePlayer(hand, 'CO', true);
   hand = togglePlayer(hand, 'BTN', true);
+  assert.ok(validateSetup(hand).some((p) => /Pick which seat is you/.test(p)));
   hand = setHero(hand, 'BTN');
   assert.ok(validateSetup(hand).some((p) => /Enter your own stack/.test(p)));
   hand = updatePlayer(hand, 'BTN', { stack: toUnits(40) });
-  assert.deepEqual(validateSetup(hand), [], 'the blinds need no stack of their own');
+  assert.deepEqual(validateSetup(hand), [], 'the other seat needs no stack of its own');
 });
 
 test('only your own stack is required', () => {
   let hand = createHand({ tableSize: 6 });
+  hand = togglePlayer(hand, 'BB', true);
   hand = togglePlayer(hand, 'CO', true);
   hand = setHero(hand, 'CO');
   hand = updatePlayer(hand, 'CO', { stack: toUnits(40) });
-  // SB and BB are in the hand because they post, but nobody looked up what
-  // they had, and the hand is still perfectly exportable.
+  // The big blind is listed because it played, but nobody looked up what it
+  // had, and the hand is still perfectly exportable.
   assert.deepEqual(validateSetup(hand), []);
   assert.ok(hand.players.filter((p) => !p.isHero).every((p) => p.stack === 0));
 });
 
 test('a big blind ante is one big blind, with no size to enter', () => {
   let hand = createHand({ tableSize: 6 });
+  hand = togglePlayer(hand, 'BB', true);
   hand = togglePlayer(hand, 'BTN', true);
   hand = { ...hand, players: hand.players.map((p) => ({ ...p, stack: toUnits(40) })) };
   hand = setHero(hand, 'BTN');
@@ -113,6 +118,7 @@ test('a big blind ante is one big blind, with no size to enter', () => {
 
 test('a stack under one big blind is flagged as a probable unit mix-up', () => {
   let hand = createHand({ tableSize: 6 });
+  hand = togglePlayer(hand, 'BB', true);
   hand = togglePlayer(hand, 'CO', true);
   hand = { ...hand, players: hand.players.map((p) => ({ ...p, stack: toUnits(40) })) };
   hand = { ...hand, players: hand.players.map((p) => (p.position === 'CO' ? { ...p, stack: toUnits(0.4) } : p)) };
@@ -153,7 +159,7 @@ test('equity lands on the published numbers for known match-ups', () => {
 
 test('the next hand keeps the table and forgets the hand', () => {
   let hand = createHand({ tableSize: 8, scheme: 'gg' });
-  for (const position of ['UTG', 'UTG+1', 'MP', 'CO', 'BTN']) hand = togglePlayer(hand, position, true);
+  for (const position of ['SB', 'BB', 'UTG', 'UTG+1', 'MP', 'CO', 'BTN']) hand = togglePlayer(hand, position, true);
   // MP1 is deliberately never switched on.
   hand = { ...hand, players: hand.players.map((p) => ({ ...p, stack: toUnits(40), cards: parseCards('AcKc') })) };
   hand = setHero(hand, 'SB');
@@ -186,4 +192,24 @@ test('the next hand keeps the table and forgets the hand', () => {
 
   // And it is immediately playable rather than landing on a validation error.
   assert.deepEqual(validateSetup(next), []);
+});
+
+test('changing the table clears the board, not just the action', () => {
+  let hand = createHand({ tableSize: 6 });
+  hand = togglePlayer(hand, 'BB', true);
+  hand = togglePlayer(hand, 'CO', true);
+  hand = setHero(hand, 'CO');
+  hand = updatePlayer(hand, 'CO', { stack: toUnits(40) });
+  hand = { ...hand, board: parseCards('2c7d9hTs3d'), actions: [{ position: 'CO', kind: 'fold' }] };
+
+  // Reworking the seats invalidates how the hand was played, board included —
+  // otherwise a hand that folds preflop still exports a river.
+  const toggled = togglePlayer(hand, 'BTN', true);
+  assert.deepEqual(toggled.actions, []);
+  assert.deepEqual(toggled.board, []);
+  assert.ok(toggled.players.some((p) => p.position === 'BTN'));
+
+  const resized = resizeTable(hand, 9);
+  assert.deepEqual(resized.actions, []);
+  assert.deepEqual(resized.board, []);
 });

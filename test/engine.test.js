@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { replay } from '../src/core/engine.js';
+import { toTextHH } from '../src/export/textHH.js';
 import { fromUnits, toUnits } from '../src/core/amount.js';
 import { buildHand, fold, check, call, bet, raise, allIn } from './helpers.js';
 
@@ -276,4 +277,55 @@ test('an unknown stack can win a pot without a stack ever being invented', () =>
   // BTN's 3 plus the SB's 0.5 plus the 3 of the BB's raise that BTN matched.
   assert.equal(bbOf(state.winners[0].amount), 6.5);
   assert.deepEqual(state.returns.map((r) => [r.position, bbOf(r.amount)]), [['BB', 6]]);
+});
+
+test('a hand that ends preflop reports no board, whatever the draft holds', () => {
+  // A board left over from an earlier edit must not leak into a hand that never
+  // saw a flop — the engine reports only the streets it actually dealt.
+  const hand = buildHand({
+    tableSize: 6, scheme: 'standard', unit: 'bb', sb: 0.5, bb: 1,
+    seats: { SB: 0, BB: 40, CO: 40 },
+    hero: 'BB',
+    board: '2c7d9hTs3d',
+    actions: [raise('CO', 3), fold('SB'), fold('BB')],
+  });
+  const state = replay(hand);
+  assert.equal(state.status, 'complete');
+  assert.deepEqual(state.streets.map((s) => s.id), ['preflop']);
+  assert.deepEqual(state.board, [], 'no flop was dealt, so no flop is reported');
+  assert.ok(!toTextHH(hand, state).includes('Board ['));
+});
+
+test('an unlisted blind posts anyway, and listing it changes nothing', () => {
+  // Whether you bother to list the blinds is a note-taking decision, not a
+  // fact about the hand, so the pot and the result have to come out identical.
+  const play = (seats, actions) => replay(buildHand({
+    tableSize: 6, scheme: 'standard', unit: 'bb', sb: 0.5, bb: 1, ante: 1, anteMode: 'bb',
+    seats, hero: 'BTN', actions,
+  }));
+
+  const listed = play({ SB: 0, BB: 0, CO: 40, BTN: 40 },
+    [raise('CO', 3), fold('BTN'), fold('SB'), fold('BB')]);
+  const unlisted = play({ CO: 40, BTN: 40 }, [raise('CO', 3), fold('BTN')]);
+
+  assert.equal(bbOf(listed.pot), 3.5);
+  assert.equal(bbOf(unlisted.pot), bbOf(listed.pot));
+  assert.deepEqual(
+    unlisted.winners.map((w) => [w.position, bbOf(w.amount)]),
+    listed.winners.map((w) => [w.position, bbOf(w.amount)]),
+  );
+  // The open is uncalled only above the big blind, not all the way to zero —
+  // the unlisted blind's chip matched it just as a listed one would.
+  assert.deepEqual(unlisted.returns.map((r) => [r.position, bbOf(r.amount)]), [['CO', 2]]);
+});
+
+test('with the blinds unlisted the price is still one big blind', () => {
+  const state = replay(buildHand({
+    tableSize: 6, scheme: 'standard', unit: 'bb', sb: 0.5, bb: 1,
+    seats: { CO: 40, BTN: 40 }, hero: 'BTN', actions: [],
+  }));
+  assert.equal(state.toAct, 'CO');
+  assert.equal(bbOf(state.legal.toCall), 1);
+  assert.equal(bbOf(state.legal.minTo), 2);
+  assert.equal(bbOf(state.pot), 1.5, 'the blinds are in the middle even with nobody sitting there');
 });

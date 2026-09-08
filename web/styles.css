@@ -104,6 +104,19 @@ button.ghost {
 button.ghost.back { font-size: 20px; line-height: 1; padding: 4px 12px; }
 
 .hint { font-size: 12px; color: var(--muted); margin: 6px 0 0; }
+.count { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px;
+  background: var(--panel-2); color: var(--muted); font-size: 11px; vertical-align: middle; }
+
+.library { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.library li { display: flex; align-items: stretch; gap: 8px; }
+.libopen { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;
+  padding: 10px 12px; text-align: left; border-radius: 10px; cursor: pointer;
+  background: var(--panel-2); border: 1px solid var(--line); color: var(--ink); font-family: inherit; }
+.libopen b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.libopen i { font-size: 11px; font-style: normal; color: var(--muted); }
+.library .ghost { flex: 0 0 auto; padding: 8px 12px; font-size: 12px; }
+.library .ghost.danger { color: var(--danger); border-color: var(--danger); }
+
 .skipbar { display: flex; align-items: center; gap: 12px; }
 .skipbar > div { flex: 1; min-width: 0; }
 .skipbar strong { display: block; font-size: 14px; }
@@ -174,11 +187,15 @@ button.ghost.back { font-size: 20px; line-height: 1; padding: 4px 12px; }
 }
 .deck-card b { position: relative; z-index: 1; font-weight: 800;
   font-size: clamp(11px, 3.4vw, 18px); font-size: clamp(11px, 4.4cqw, 20px); }
-/* The suit sits centred behind the rank, as a watermark rather than a corner pip. */
+/* The suit is a watermark behind the rank: big enough to read as the shape of
+   the suit and pushed off centre so the rank is not sitting on top of the
+   busiest part of it. Overflow is clipped by the card, which is the point —
+   it reads as a pip the card was cut from rather than a small icon. */
 .deck-card i {
   position: absolute; inset: 0; z-index: 0; display: grid; place-items: center;
-  font-style: normal; opacity: .3; line-height: 1;
-  font-size: clamp(16px, 5.6vw, 30px); font-size: clamp(16px, 6.4cqw, 34px);
+  font-style: normal; opacity: .34; line-height: 1;
+  transform: translate(16%, 12%);
+  font-size: clamp(22px, 7.6vw, 42px); font-size: clamp(22px, 8.8cqw, 48px);
 }
 .deck-card:disabled { opacity: .18; cursor: default; }
 .deck-card:not(:disabled):active { transform: scale(.92); }
