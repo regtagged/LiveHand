@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { seatRing, preflopRing, postflopRing, actionOrder } from '../src/core/positions.js';
 import {
   createHand, togglePlayer, resizeTable, setHero, updatePlayer, validateSetup, reviveHand,
-  nextHand, anteAmount,
+  nextHand, anteAmount, setAllStacks,
 } from '../src/core/hand.js';
 import { evaluate } from '../src/core/evaluate.js';
 import { equity } from '../src/core/equity.js';
@@ -212,4 +212,21 @@ test('changing the table clears the board, not just the action', () => {
   const resized = resizeTable(hand, 9);
   assert.deepEqual(resized.actions, []);
   assert.deepEqual(resized.board, []);
+});
+
+test('one depth can be given to the whole table', () => {
+  let hand = createHand({ tableSize: 6 });
+  for (const position of ['BB', 'CO', 'BTN']) hand = togglePlayer(hand, position, true);
+  hand = setHero(hand, 'BTN');
+  hand = updatePlayer(hand, 'CO', { stack: toUnits(12) });
+
+  // "40bb effective" is how the hand would be described out loud, and it
+  // overwrites the odd seat that was already set.
+  const level = setAllStacks(hand, toUnits(40));
+  assert.deepEqual(level.players.map((p) => p.stack), [toUnits(40), toUnits(40), toUnits(40)]);
+  assert.deepEqual(validateSetup(level), []);
+
+  // Seats switched off stay off, and the hero is untouched.
+  assert.deepEqual(level.players.map((p) => p.position), ['BB', 'CO', 'BTN']);
+  assert.equal(level.players.find((p) => p.isHero).position, 'BTN');
 });

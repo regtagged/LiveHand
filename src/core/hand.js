@@ -123,6 +123,17 @@ export function setHero(hand, position) {
   };
 }
 
+/**
+ * Give every listed seat the same stack.
+ *
+ * Hands are usually described as one effective depth — "40bb effective", "we
+ * were both 100bb" — rather than a number per seat, so for most hands this is
+ * the only stack entry needed.
+ */
+export function setAllStacks(hand, stack) {
+  return { ...hand, players: hand.players.map((player) => ({ ...player, stack })) };
+}
+
 export function updatePlayer(hand, position, patch) {
   return {
     ...hand,

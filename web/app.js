@@ -12,7 +12,7 @@ import { RANKS, SUITS, SUIT_GLYPH, SUIT_NAME, cardStr, sameCard } from './src/co
 import { replay, sizeToTotal, withAction, withoutLastAction, STREET_LABEL, BOARD_LENGTH } from './src/core/engine.js';
 import {
   createHand, resizeTable, togglePlayer, setHero, updatePlayer, validateSetup,
-  usedCards, reviveHand, nextHand, anteAmount, heroOf,
+  usedCards, reviveHand, nextHand, anteAmount, heroOf, setAllStacks,
 } from './src/core/hand.js';
 import { money, stakesLabel, isUnfinished, openQuestion } from './src/core/narrate.js';
 import { seatRing } from './src/core/positions.js';
@@ -258,6 +258,14 @@ function renderTable() {
     <p class="hint" style="margin:0 0 10px">Switch on the seats that were in the hand and enter their
       stacks in ${unitLabel()}. The blinds post either way, so there is no need to list them unless
       they did something; a stack is only needed where it matters.</p>
+    ${hand.players.length ? `<div class="field alldepths">
+      <label>Everyone the same depth</label>
+      <div class="presets">
+        ${DEPTHS.map((depth) => `<button data-act="depth-all" data-value="${depth}"
+          aria-pressed="${allAtDepth(hand, depth)}"><b>${depth}</b><i>BB</i></button>`).join('')}
+      </div>
+    </div>` : ''}
+
     <div class="seatgrid">
       ${ring.map((position) => {
         const player = hand.players.find((p) => p.position === position);
@@ -352,11 +360,19 @@ function offerDepths(player) {
   return !!player && !(player.stack > 0);
 }
 
+/** The depths offered anywhere a stack can be set in one tap. */
+const DEPTHS = [20, 30, 40, 60, 100];
+
 function depthRow(position, hand) {
   return `<div class="presets seat-depths">
-    ${[20, 30, 40, 60, 100].map((depth) => `<button data-act="depth" data-pos="${position}"
+    ${DEPTHS.map((depth) => `<button data-act="depth" data-pos="${position}"
       data-value="${depth}"><b>${depth}</b><i>BB</i></button>`).join('')}
   </div>`;
+}
+
+/** True when every listed seat is already sitting on exactly this depth. */
+function allAtDepth(hand, depth) {
+  return hand.players.length > 0 && hand.players.every((p) => p.stack === depth * hand.bb);
 }
 
 function problemsHtml(problems) {
@@ -870,6 +886,7 @@ function handleClick(target) {
     case 'depth': setHand(updatePlayer(app.hand, target.dataset.pos, {
       stack: Number(target.dataset.value) * app.hand.bb,
     })); break;
+    case 'depth-all': setHand(setAllStacks(app.hand, Number(target.dataset.value) * app.hand.bb)); break;
     case 'fold-to-me': foldToHero(); break;
     case 'toggle-names': app.ui.showNames = !app.ui.showNames; render(); break;
     case 'toggle-seat': {

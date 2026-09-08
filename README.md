@@ -54,8 +54,11 @@ so listing it is a note-taking decision rather than a fact about the hand: the
 pot, the uncalled-bet return and the result all come out identical either way,
 which is asserted by a test.
 
-Any seat that still needs a stack offers one-tap depths (20/30/40/60/100 bb),
-or you can type an exact number. Every listed seat was listed on purpose, so
+Hands are usually described as one effective depth — "40bb effective", "we were
+both 100bb" — so **Everyone the same depth** sets every listed seat at once,
+and for most hands that is the only stack entry needed. Any seat that still
+needs its own number offers the same one-tap depths, or you can type an exact
+amount. Every listed seat was listed on purpose, so
 they all get the shortcut. A villain needs a stack for **All-in** to mean
 anything, so give the aggressor a depth if the hand ends in a jam.
 
