@@ -13,7 +13,7 @@ const SHELL = [
   'manifest.webmanifest',
   'src/core/amount.js', 'src/core/cards.js', 'src/core/engine.js', 'src/core/equity.js',
   'src/core/evaluate.js', 'src/core/hand.js', 'src/core/narrate.js', 'src/core/positions.js',
-  'src/export/textHH.js', 'src/export/replayer.js',
+  'src/export/replayer.js',
   'src/render/scene.js', 'src/render/svg.js', 'src/render/ggSheet.js', 'src/render/tableSheet.js',
 ];
 

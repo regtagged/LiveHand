@@ -1,14 +1,18 @@
 # LiveHand
 
-Type a poker hand on your phone while it's still fresh, and get it out in the
-three formats people actually share:
+Type a poker hand on your phone while it's still fresh, and hand it to someone
+in a form they can actually read:
 
-1. **Text hand history** — PokerStars-family plain text, the format trackers,
-   solvers and forums already read.
-2. **Image** — either **HH View** (the share-sheet layout: stacks, then one line
-   of action per street) or **Table View** (felt on top, action columns below).
-   You pick at export time.
+1. **Table View** — the felt with everyone's stacks and cards, and the action
+   in a column per street underneath.
+2. **PT4 View** — the hand written out: stacks, then one line of action per
+   street, with card glyphs in four colour.
 3. **Replayer** — one self-contained HTML file that steps through the hand.
+
+There is no plain-text hand history in the app. A `Seat 3: BTN (40 in chips)`
+wall is fine for a tracker and poor for a person, and a person is who these are
+for. The generator is still in `src/export/textHH.js`, still tested, and still
+the only machine-readable output — it just isn't something the app offers.
 
 It is a static web app. Everything — the betting engine, both image renderers,
 the replayer generator — runs in the browser, so it works at a table with no
@@ -128,8 +132,9 @@ For scale, with nothing typed at all:
 Both are taps on large targets with no keyboard, which is the point: the
 keyboard is where the time and the typos go on a phone.
 
-All three formats are previewed, with copy / download / share. The share button
-uses the native share sheet on phones that have one.
+All three are previewed, with download / share. The share button uses the
+native share sheet on phones that have one; the images go as PNG and the
+replayer as a single HTML file.
 
 **Save hand** keeps a hand on the device, and the Session screen lists what you
 have kept: tap one to reopen it, or delete it in two taps. It is all
@@ -175,13 +180,13 @@ src/core/       the hand and the rules — no DOM, runs in Node and the browser
   amount.js      money as integer hundredths, so comparisons are exact
   narrate.js     one place that turns an action into words
 src/export/
-  textHH.js      export 1: PokerStars-family text
+  textHH.js      PokerStars-family text — not surfaced in the app
   replayer.js    export 3: frames + a standalone HTML player
 src/render/
   scene.js       a small scene graph both image layouts build into
   svg.js          scene -> SVG (preview, and testable in Node)
-  ggSheet.js      export 2a: the GG share sheet
-  tableSheet.js   export 2b: the client-style table
+  ggSheet.js      export 2: the PT4 view
+  tableSheet.js   export 1: the table view
 web/             the UI: index.html, styles.css, app.js, canvas.js, store.js
   canvas.js      scene -> canvas, the path a downloaded PNG takes
 server.js        static file server, used for local development
