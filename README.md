@@ -141,8 +141,12 @@ have kept: tap one to reopen it, or delete it in two taps. It is all
 localStorage — no account, nothing leaves the phone — so that list is the whole
 library, and there is no copy of a deleted hand anywhere else.
 
-**Next hand** keeps the table and the stakes, clears the cards and the action,
-and opens the deck straight away for the next holding.
+**Next hand** starts an entirely new hand. The stakes, the table size and the
+game's name carry, because those belong to the session you are sitting in;
+everything else — seats, stacks, who you were, cards, board, action, whether
+you were hiding your hand — starts over. The Table step then offers **Same
+seats as last hand** for one tap, so a fresh hand costs nothing when the table
+has not changed.
 
 ## What the engine guarantees
 

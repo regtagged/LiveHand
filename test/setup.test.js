@@ -157,41 +157,44 @@ test('equity lands on the published numbers for known match-ups', () => {
   assert.ok(set > 95, `flopped set should be a big favourite, got ${set.toFixed(1)}`);
 });
 
-test('the next hand keeps the table and forgets the hand', () => {
+test('the next hand keeps the game and forgets everything else', () => {
   let hand = createHand({ tableSize: 8, scheme: 'gg' });
-  for (const position of ['SB', 'BB', 'UTG', 'UTG+1', 'MP', 'CO', 'BTN']) hand = togglePlayer(hand, position, true);
-  // MP1 is deliberately never switched on.
+  for (const position of ['SB', 'BB', 'UTG', 'MP', 'CO', 'BTN']) hand = togglePlayer(hand, position, true);
   hand = { ...hand, players: hand.players.map((p) => ({ ...p, stack: toUnits(40), cards: parseCards('AcKc') })) };
   hand = setHero(hand, 'SB');
   hand = {
     ...hand,
+    tournament: 'Bounty Hunters HR',
+    sb: toUnits(0.5),
+    bb: toUnits(1),
+    anteMode: 'bb',
     board: parseCards('2c7dKh'),
     actions: [{ position: 'UTG', kind: 'fold' }],
     winners: ['SB'],
     note: 'was this a fold?',
+    hideHeroCards: true,
   };
 
   const next = nextHand(hand);
 
-  // The table survives intact — including the seat that was switched off, which
-  // must not come back with an empty stack and block the next hand.
-  assert.deepEqual(next.players.map((p) => p.position), hand.players.map((p) => p.position));
-  assert.ok(!next.players.some((p) => p.position === 'MP1'));
-  assert.deepEqual(next.players.map((p) => p.stack), hand.players.map((p) => p.stack));
-  assert.equal(next.players.find((p) => p.isHero).position, 'SB');
+  // The game you are sitting in carries.
+  assert.equal(next.tournament, 'Bounty Hunters HR');
+  assert.equal(next.sb, toUnits(0.5));
+  assert.equal(next.bb, toUnits(1));
+  assert.equal(next.anteMode, 'bb');
   assert.equal(next.tableSize, 8);
   assert.equal(next.scheme, 'gg');
 
-  // The hand itself does not.
+  // The hand does not: an entirely new one, down to an empty table.
   assert.notEqual(next.id, hand.id);
+  assert.deepEqual(next.players, []);
   assert.deepEqual(next.actions, []);
   assert.deepEqual(next.board, []);
   assert.deepEqual(next.winners, []);
   assert.equal(next.note, '');
-  assert.ok(next.players.every((p) => p.cards.length === 0));
-
-  // And it is immediately playable rather than landing on a validation error.
-  assert.deepEqual(validateSetup(next), []);
+  // Left set, this quietly made every later hand a mystery hand too.
+  assert.equal(next.hideHeroCards, false);
+  assert.ok(validateSetup(next).some((p) => /at least two/.test(p)));
 });
 
 test('changing the table clears the board, not just the action', () => {

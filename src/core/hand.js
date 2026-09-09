@@ -170,27 +170,32 @@ export function validateSetup(hand) {
 }
 
 /**
- * The next hand at the same table.
+ * A new hand in the same game.
  *
- * Same seats, same people, same stakes; only the cards and the action start
- * over. Stacks carry across because the table really is where the last hand
- * left it, which is a far better starting guess than zero.
+ * The stakes, the table size and what the game is called belong to the session
+ * you are sitting in, so those carry. Everything else — the seats, the stacks,
+ * who you were, your cards, the board, the action, whether you were hiding
+ * your hand — describes the hand that just finished, and starts over.
  *
- * Note this keeps `players` as it stands rather than rebuilding from the seat
- * ring — seats deliberately left out of the last hand must stay out, or every
- * new hand silently re-adds them with an empty stack.
+ * This used to keep the table on the grounds that stacks are a good starting
+ * guess, which made "next hand" land on a screen identical to the one you left
+ * and read as though the button had done nothing. The Table step offers the
+ * previous seats back in one tap instead, which is the same shortcut without
+ * pretending the last hand is still open.
  */
 export function nextHand(hand) {
-  return {
-    ...hand,
-    id: newHandId(),
-    createdAt: new Date().toISOString(),
-    players: hand.players.map((player) => ({ ...player, cards: [] })),
-    board: [],
-    actions: [],
-    winners: [],
-    note: '',
-  };
+  return createHand({
+    tournament: hand.tournament,
+    level: hand.level,
+    game: hand.game,
+    unit: hand.unit,
+    sb: hand.sb,
+    bb: hand.bb,
+    ante: hand.ante,
+    anteMode: hand.anteMode,
+    tableSize: hand.tableSize,
+    scheme: hand.scheme,
+  });
 }
 
 /** Cards known so far, for duplicate detection and the card picker's greying. */

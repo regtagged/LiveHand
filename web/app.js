@@ -34,7 +34,7 @@ const app = {
   step: 1,
   // sizeMode null means "whatever suits this street" — see sizeMode().
   ui: { sizeMode: null, sizeValue: '', exportTab: 'table', showNames: false, picker: null,
-        confirmDelete: null, allDepth: '' },
+        confirmDelete: null, allDepth: '', lastTable: null },
 };
 
 const esc = (value) => String(value).replace(/[&<>"']/g, (c) => (
@@ -262,6 +262,12 @@ function renderTable() {
     <p class="hint" style="margin:0 0 10px">Switch on the seats that were in the hand and enter their
       stacks in ${unitLabel()}. The blinds post either way, so there is no need to list them unless
       they did something; a stack is only needed where it matters.</p>
+    ${!hand.players.length && app.ui.lastTable && app.ui.lastTable.tableSize === hand.tableSize
+      ? `<button class="secondary sameseats" data-act="same-seats">
+          Same seats as last hand (${esc(app.ui.lastTable.players.map((p) => p.position).join(', '))})
+        </button>`
+      : ''}
+
     ${hand.players.length ? `<div class="field alldepths">
       <label for="alldepth">Everyone the same depth</label>
       <div class="presets">
@@ -908,6 +914,13 @@ function handleClick(target) {
       setHand(setAllStacks(app.hand, Number(target.dataset.value) * app.hand.bb));
       break;
     case 'depth-all-typed': applyTypedDepth(); break;
+    case 'same-seats': {
+      const last = app.ui.lastTable;
+      if (!last) break;
+      setHand({ ...app.hand, players: last.players.map((p) => ({ ...p, cards: [] })) });
+      toast('Seats and stacks restored');
+      break;
+    }
     case 'fold-to-me': foldToHero(); break;
     case 'toggle-names': app.ui.showNames = !app.ui.showNames; render(); break;
     case 'toggle-seat': {
@@ -1197,13 +1210,15 @@ function undo() {
 }
 
 function restart() {
+  // Kept in memory so the cleared table can be put back in one tap. It is a
+  // shortcut for the next few seconds, not state worth persisting.
+  const previous = app.hand;
+  app.ui.lastTable = previous.players.length
+    ? { players: previous.players.map((p) => ({ ...p, cards: [] })), tableSize: previous.tableSize }
+    : null;
   app.step = 1;
-  setHand(nextHand(app.hand));
-  // Landing on a table that looks exactly as you left it reads as "nothing
-  // happened", so go straight to the one thing that is genuinely new.
-  const hero = heroOf(app.hand);
-  if (hero) autoOpen(() => pickHoleCards(hero.position, 0));
-  toast('New hand — same table, fresh cards');
+  setHand(nextHand(previous));
+  toast('New hand — stakes kept, table cleared');
 }
 
 /* -------------------------------------------------------------------- boot */
